@@ -97,11 +97,10 @@ func (h *Handler) credentials(app store.App) (fcm.Credentials, error) {
 	return fcm.ParseCredentials(bytes.TrimSpace(raw))
 }
 
-// shortToken is enough of a token to recognise it in the log without keeping the whole device address.
+// shortToken is enough of a token to recognise it in the log without keeping the whole device address:
+// the first characters, never more than half of it.
 func shortToken(token string) string {
 	runes := []rune(token)
-	if len(runes) <= 8 {
-		return string(runes)
-	}
-	return string(runes[:8]) + "…"
+	keep := min(8, len(runes)/2)
+	return string(runes[:keep]) + "…"
 }
