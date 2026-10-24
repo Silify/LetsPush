@@ -143,12 +143,15 @@ func isUnregistered(status int, body []byte) bool {
 }
 
 // buildMessage is the FCM v1 message: a notification Android shows by itself, plus the data for the app.
+// With no title and no body the message is data only, and the app shows it.
 func buildMessage(m Message) map[string]any {
 	out := map[string]any{
-		"token":        m.Token,
-		"notification": map[string]string{"title": m.Title, "body": m.Body},
-		"android":      map[string]any{"priority": "high"},
-		"apns":         map[string]any{"headers": map[string]string{"apns-priority": "10"}},
+		"token":   m.Token,
+		"android": map[string]any{"priority": "high"},
+		"apns":    map[string]any{"headers": map[string]string{"apns-priority": "10"}},
+	}
+	if m.Title != "" || m.Body != "" {
+		out["notification"] = map[string]string{"title": m.Title, "body": m.Body}
 	}
 	if len(m.Data) > 0 {
 		out["data"] = m.Data

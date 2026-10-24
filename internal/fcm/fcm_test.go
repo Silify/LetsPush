@@ -283,3 +283,19 @@ func TestAFailedSignInIsAnError(t *testing.T) {
 		t.Fatalf("expected a sign-in error, got %v", err)
 	}
 }
+
+func TestAMessageWithoutTextIsDataOnly(t *testing.T) {
+	g := newGoogle(t)
+	err := g.client(nil).Send(context.Background(), creds(t, newKey(t)), Message{Token: "device", Data: map[string]string{"a": "1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sent map[string]map[string]any
+	json.Unmarshal(g.lastSend.Load().([]byte), &sent)
+	if _, has := sent["message"]["notification"]; has {
+		t.Fatal("a message with no text must not carry a notification block")
+	}
+	if sent["message"]["data"] == nil {
+		t.Fatal("the data was dropped")
+	}
+}
