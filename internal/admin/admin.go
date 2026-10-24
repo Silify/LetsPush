@@ -71,7 +71,16 @@ func New(s Store, sealer Sealer, serverSecret string, now func() time.Time) (htt
 	mux.Handle("GET /admin/api/me", h.protect(h.me))
 	mux.Handle("POST /admin/api/password", h.protect(h.changePassword))
 
+	mux.Handle("GET /admin/api/apps", h.protect(h.listApps))
+	mux.Handle("POST /admin/api/apps", h.protect(h.createApp))
+	mux.Handle("GET /admin/api/apps/{id}", h.protect(h.showApp))
+	mux.Handle("DELETE /admin/api/apps/{id}", h.protect(h.deleteApp))
+	mux.Handle("PUT /admin/api/apps/{id}/credentials", h.protect(h.setCredentials))
+	mux.Handle("PUT /admin/api/apps/{id}/settings", h.protect(h.setSettings))
+	mux.Handle("GET /admin/api/apps/{id}/logs", h.protect(h.logs))
 
+	mux.Handle("POST /admin/api/apps/{id}/keys", h.protect(h.createKey))
+	mux.Handle("DELETE /admin/api/apps/{id}/keys/{keyId}", h.protect(h.revokeKey))
 
 	// Anything else under the prefix is a JSON 404, not the web page.
 	mux.HandleFunc("/admin/api/", func(w http.ResponseWriter, r *http.Request) {
