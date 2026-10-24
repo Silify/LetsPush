@@ -1,0 +1,20 @@
+# Build output
+/bin/
+/dist/
+
+# Local data and secrets
+/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+*service-account*.json
+
+# Frontend
+node_modules/
+/web/dist/
+
+# Tools
+.idea/
+.vscode/
+.DS_Store
