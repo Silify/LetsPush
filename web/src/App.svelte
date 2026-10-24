@@ -1,12 +1,13 @@
 <script>
-  import Toasts from './components/Toasts.svelte';
+  import { ModeWatcher } from 'mode-watcher';
   import Topbar from './components/Topbar.svelte';
   import Account from './pages/Account.svelte';
   import AppDetail from './pages/AppDetail.svelte';
   import Apps from './pages/Apps.svelte';
   import Login from './pages/Login.svelte';
-  import { api, whenSignedOut } from './lib/api.js';
-  import { go, route } from './lib/router.svelte.js';
+  import { Toaster } from '$lib/components/ui/sonner/index.js';
+  import { api, whenSignedOut } from '$lib/api.js';
+  import { go, route } from '$lib/router.svelte.js';
 
   // null while checking, '' when signed out, otherwise the admin's email.
   let email = $state(null);
@@ -24,8 +25,11 @@
   }
 </script>
 
+<!-- Follows the system light or dark setting. -->
+<ModeWatcher defaultMode="system" />
+
 {#if email === null}
-  <div class="center"><p class="muted">Loading…</p></div>
+  <div class="grid min-h-screen place-items-center"><p class="text-sm text-muted-foreground">Loading…</p></div>
 {:else if email === ''}
   <Login onSignedIn={signedIn} />
 {:else}
@@ -41,4 +45,4 @@
   {/if}
 {/if}
 
-<Toasts />
+<Toaster richColors={false} position="bottom-center" />
