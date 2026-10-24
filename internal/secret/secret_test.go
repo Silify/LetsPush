@@ -78,3 +78,17 @@ func TestBoxSealsAndOpens(t *testing.T) {
 		t.Fatalf("opened garbage: %v", err)
 	}
 }
+
+func TestNewAccessKey(t *testing.T) {
+	key, prefix, hash, err := NewAccessKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(key) != 32 || prefix != key[:6] || hash != Hash(key) || strings.Contains(hash, key) {
+		t.Fatalf("unexpected key parts: %q %q %q", key, prefix, hash)
+	}
+	other, _, _, _ := NewAccessKey()
+	if other == key {
+		t.Fatal("keys must be random")
+	}
+}

@@ -131,3 +131,13 @@ func (b *Box) Open(sealed string) ([]byte, error) {
 	}
 	return plain, nil
 }
+
+// NewAccessKey makes an access key. Only its hash is stored; the key is shown once.
+// The prefix is the first characters, kept to recognise a key in a list.
+func NewAccessKey() (key, prefix, hash string, err error) {
+	key, err = RandomHex(16)
+	if err != nil {
+		return "", "", "", err
+	}
+	return key, key[:6], Hash(key), nil
+}
