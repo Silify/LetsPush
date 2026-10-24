@@ -1,4 +1,8 @@
-<svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
-  <rect width="32" height="32" rx="8" fill="var(--accent)" />
-  <path d="M9 16.5 22.5 9.5l-3.4 13-4-4.6-3.3 2.4.3-4.6-4.1-.6Z" fill="var(--accent-text)" />
-</svg>
+<span
+  class="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground"
+  aria-hidden="true"
+>
+  <svg width="16" height="16" viewBox="0 0 32 32" fill="currentColor">
+    <path d="M5 16.5 27 6l-5.4 20-6.6-7.2-5.2 3.8.5-7.2L5 16.5Z" />
+  </svg>
+</span>
