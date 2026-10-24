@@ -1,9 +1,14 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import tailwindcss from '@tailwindcss/vite';
 
 // The build goes into the Go package that embeds it.
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [tailwindcss(), svelte()],
+  resolve: {
+    alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) },
+  },
   build: {
     outDir: '../internal/webui/dist',
     // scripts/clean.mjs empties it first and keeps .gitkeep, which the Go embed needs.
