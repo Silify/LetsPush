@@ -23,3 +23,4 @@ node_modules/
 # Local development data
 /data-dev/
 docker-compose.override.yml
+*.log
