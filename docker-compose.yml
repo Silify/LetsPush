@@ -1,0 +1,25 @@
+name: letspush
+
+services:
+  letspush:
+    build:
+      context: .
+      args:
+        # Change these in .env to use a registry mirror.
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
+        GO_IMAGE: ${GO_IMAGE:-golang:1.25-alpine}
+        RUN_IMAGE: ${RUN_IMAGE:-alpine:3.22}
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    restart: unless-stopped
+    environment:
+      LETSPUSH_SECRET: ${LETSPUSH_SECRET:?set LETSPUSH_SECRET in .env}
+      LETSPUSH_ADMIN_EMAIL: ${LETSPUSH_ADMIN_EMAIL:-}
+      LETSPUSH_ADMIN_PASSWORD: ${LETSPUSH_ADMIN_PASSWORD:-}
+    ports:
+      # Local only: put a reverse proxy with HTTPS in front of it.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - letspush-data:/data
+
+volumes:
+  letspush-data:
