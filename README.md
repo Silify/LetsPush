@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo.svg" alt="LetsPush" width="72" height="72"></p>
+<p align="center"><img src="assets/logo.svg" alt="LetsPush" width="192" height="192"></p>
 
 # LetsPush
 
