@@ -4,6 +4,8 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -18,7 +20,16 @@ import (
 	"github.com/Silify/letspush/internal/store"
 )
 
+// version is set at build time: -ldflags "-X main.version=1.2.3".
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Println("letspush", version)
+		return
+	}
 	if err := run(); err != nil {
 		log.Fatalf("letspush: %v", err)
 	}
@@ -72,7 +83,7 @@ func run() error {
 
 	failed := make(chan error, 1)
 	go func() {
-		log.Printf("listening on %s", cfg.Addr)
+		log.Printf("letspush %s listening on %s", version, cfg.Addr)
 		failed <- srv.ListenAndServe()
 	}()
 
