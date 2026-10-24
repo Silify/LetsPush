@@ -56,6 +56,8 @@ func New(s Store, sender Sender, opener Opener) http.Handler {
 	mux.HandleFunc("POST /api/v2/tokens/", h.createTokenV2)
 	mux.HandleFunc("DELETE /api/v2/tokens/{token}", h.deleteToken)
 
+	mux.HandleFunc("POST /api/v2/push", h.push)
+	mux.HandleFunc("POST /api/v2/push/", h.push)
 	return mux
 }
 
