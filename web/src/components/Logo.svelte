@@ -1,8 +1,9 @@
-<span
-  class="inline-flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground"
-  aria-hidden="true"
->
-  <svg width="16" height="16" viewBox="0 0 32 32" fill="currentColor">
-    <path d="M5 16.5 27 6l-5.4 20-6.6-7.2-5.2 3.8.5-7.2L5 16.5Z" />
-  </svg>
-</span>
+<!-- A "p" whose bowl is a ring with a dot: a push pin and a notification ping. It takes the theme's colours. -->
+<svg class="size-7 shrink-0" viewBox="0 0 32 32" aria-hidden="true">
+  <rect width="32" height="32" rx="8" class="fill-primary" />
+  <g class="text-primary-foreground" fill="currentColor">
+    <rect x="8.2" y="8" width="4.2" height="17" rx="2.1" />
+    <circle cx="17.2" cy="13.4" r="4.6" fill="none" stroke="currentColor" stroke-width="4.2" />
+    <circle cx="17.2" cy="13.4" r="1.5" />
+  </g>
+</svg>
