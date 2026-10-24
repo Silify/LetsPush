@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.svg" alt="LetsPush" width="72" height="72"></p>
+
 # LetsPush
 
 A small push notification gateway. Your sites and apps send it notifications over a simple HTTP API, and
