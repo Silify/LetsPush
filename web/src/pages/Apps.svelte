@@ -1,8 +1,15 @@
 <script>
-  import Modal from '../components/Modal.svelte';
-  import { api } from '../lib/api.js';
-  import { go } from '../lib/router.svelte.js';
-  import { toast } from '../lib/toast.svelte.js';
+  import * as Alert from '$lib/components/ui/alert/index.js';
+  import { Badge } from '$lib/components/ui/badge/index.js';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import * as Card from '$lib/components/ui/card/index.js';
+  import * as Dialog from '$lib/components/ui/dialog/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Label } from '$lib/components/ui/label/index.js';
+  import { Textarea } from '$lib/components/ui/textarea/index.js';
+  import { api } from '$lib/api.js';
+  import { go } from '$lib/router.svelte.js';
+  import { toast } from '$lib/toast.js';
 
   let apps = $state(null);
   let error = $state('');
@@ -51,71 +58,85 @@
   }
 </script>
 
-<div class="page">
-  <div class="row between">
-    <div class="stack" style="gap: 4px">
-      <h1>Apps</h1>
-      <p class="muted">Each app is one mobile app, with its own Firebase key and access keys.</p>
+<main class="mx-auto grid max-w-3xl gap-6 px-4 py-8">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="grid gap-1">
+      <h1 class="text-2xl font-semibold tracking-tight">Apps</h1>
+      <p class="text-sm text-muted-foreground">Each app is one mobile app, with its own Firebase key and access keys.</p>
     </div>
-    <button class="btn primary" type="button" onclick={open}>New app</button>
+    <Button onclick={open}>New app</Button>
   </div>
 
   {#if error}
-    <p class="notice error">{error}</p>
+    <Alert.Root variant="destructive"><Alert.Description>{error}</Alert.Description></Alert.Root>
   {:else if apps === null}
-    <p class="muted">Loading…</p>
+    <p class="text-sm text-muted-foreground">Loading…</p>
   {:else if apps.length === 0}
-    <div class="card">
-      <div class="empty">
-        <h2>No apps yet</h2>
-        <p>Add the app you send notifications to. You will need its Firebase service-account key.</p>
-        <button class="btn primary" type="button" onclick={open}>Create your first app</button>
-      </div>
-    </div>
+    <Card.Root>
+      <Card.Content class="grid justify-items-center gap-3 py-10 text-center">
+        <h2 class="text-lg font-medium">No apps yet</h2>
+        <p class="max-w-sm text-sm text-muted-foreground">
+          Add the app you send notifications to. You will need its Firebase service-account key.
+        </p>
+        <Button onclick={open}>Create your first app</Button>
+      </Card.Content>
+    </Card.Root>
   {:else}
     {#each apps as app (app.id)}
-      <a class="card" href={`#/apps/${app.id}`} style="text-decoration: none; color: inherit">
-        <header>
-          <div class="stack" style="gap: 2px">
-            <h2>{app.name}</h2>
-            <span class="muted small">{app.projectId ? `Firebase project ${app.projectId}` : 'No Firebase key yet'}</span>
-          </div>
-          {#if app.hasCredentials}
-            <span class="badge ok">Ready to send</span>
-          {:else}
-            <span class="badge warn">Needs a Firebase key</span>
-          {/if}
-        </header>
-        <div class="stats">
-          <div class="stat"><b>{app.keys}</b><span class="muted small">access keys</span></div>
-          <div class="stat"><b>{app.tokens}</b><span class="muted small">devices</span></div>
-        </div>
+      <a href={`#/apps/${app.id}`} class="block rounded-xl transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        <Card.Root>
+          <Card.Header>
+            <Card.Title>{app.name}</Card.Title>
+            <Card.Description>{app.projectId ? `Firebase project ${app.projectId}` : 'No Firebase key yet'}</Card.Description>
+            <Card.Action>
+              {#if app.hasCredentials}
+                <Badge>Ready to send</Badge>
+              {:else}
+                <Badge variant="outline">Needs a Firebase key</Badge>
+              {/if}
+            </Card.Action>
+          </Card.Header>
+          <Card.Content class="flex gap-8">
+            <div><div class="text-xl font-semibold tracking-tight">{app.keys}</div><div class="text-xs text-muted-foreground">access keys</div></div>
+            <div><div class="text-xl font-semibold tracking-tight">{app.tokens}</div><div class="text-xs text-muted-foreground">devices</div></div>
+          </Card.Content>
+        </Card.Root>
       </a>
     {/each}
   {/if}
-</div>
+</main>
 
-<Modal bind:open={creating} title="New app">
-  <form class="stack" onsubmit={create}>
-    <label>
-      Name
-      <input class="input" required maxlength="64" bind:value={name} placeholder="for example: sayan" />
-      <span class="hint">Sites send this as the app name. Letters, digits, dots, dashes and underscores.</span>
-    </label>
+<Dialog.Root bind:open={creating}>
+  <Dialog.Content class="sm:max-w-lg">
+    <Dialog.Header>
+      <Dialog.Title>New app</Dialog.Title>
+      <Dialog.Description>An app is one mobile app that notifications are sent to.</Dialog.Description>
+    </Dialog.Header>
+    <form class="grid gap-4" onsubmit={create}>
+      <div class="grid gap-2">
+        <Label for="app-name">Name</Label>
+        <Input id="app-name" required maxlength={64} bind:value={name} placeholder="for example: sayan" />
+        <p class="text-xs text-muted-foreground">
+          Sites send this as the app name. Letters, digits, dots, dashes and underscores.
+        </p>
+      </div>
 
-    <label>
-      Firebase service-account key <span class="hint">(optional now, needed to send)</span>
-      <input class="input" type="file" accept="application/json,.json" onchange={readFile} />
-      <textarea bind:value={serviceAccount} placeholder="…or paste the JSON here" spellcheck="false"></textarea>
-      <span class="hint">
-        Firebase console → Project settings → Service accounts → Generate new private key. It is stored encrypted.
-      </span>
-    </label>
+      <div class="grid gap-2">
+        <Label for="app-key">Firebase service-account key <span class="font-normal text-muted-foreground">(optional now, needed to send)</span></Label>
+        <Input id="app-key" type="file" accept="application/json,.json" onchange={readFile} />
+        <Textarea class="min-h-28 font-mono text-xs" bind:value={serviceAccount} placeholder="…or paste the JSON here" spellcheck={false} />
+        <p class="text-xs text-muted-foreground">
+          Firebase console → Project settings → Service accounts → Generate new private key. It is stored encrypted.
+        </p>
+      </div>
 
-    {#if formError}<p class="notice error" role="alert">{formError}</p>{/if}
-    <div class="row" style="justify-content: flex-end">
-      <button class="btn" type="button" onclick={() => (creating = false)}>Cancel</button>
-      <button class="btn primary" disabled={busy}>{busy ? 'Creating…' : 'Create app'}</button>
-    </div>
-  </form>
-</Modal>
+      {#if formError}
+        <Alert.Root variant="destructive" role="alert"><Alert.Description>{formError}</Alert.Description></Alert.Root>
+      {/if}
+      <Dialog.Footer>
+        <Button type="button" variant="outline" onclick={() => (creating = false)}>Cancel</Button>
+        <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create app'}</Button>
+      </Dialog.Footer>
+    </form>
+  </Dialog.Content>
+</Dialog.Root>
