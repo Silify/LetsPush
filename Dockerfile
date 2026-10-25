@@ -15,6 +15,8 @@ RUN npm run build
 
 FROM ${GO_IMAGE} AS server
 ARG GOPROXY=https://proxy.golang.org,direct
+# What the program reports as its version. Set VERSION in .env when building a release.
+ARG VERSION=dev
 ENV GOPROXY=${GOPROXY} CGO_ENABLED=0
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -22,7 +24,7 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 COPY --from=web /src/internal/webui/dist ./internal/webui/dist
-RUN go build -trimpath -ldflags="-s -w" -o /letspush ./cmd/letspush
+RUN go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /letspush ./cmd/letspush
 
 FROM ${RUN_IMAGE}
 RUN apk add --no-cache ca-certificates && adduser -D -u 10001 letspush && mkdir /data && chown letspush /data

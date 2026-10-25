@@ -13,10 +13,7 @@ pull requests or release notes.
 
 `CHANGELOG.md` in the repository root. Newest release first, with an `[Unreleased]` section on top.
 
-**Before the first release, no changelog is needed.** Git history and pull requests are enough while
-Let's Push is in development. Create `CHANGELOG.md` when the first version is released, with a single
-entry (`## [0.1.0] - YYYY-MM-DD`: `Initial release` and a short list of what Let's Push can do), then follow
-this document from then on.
+`CHANGELOG.md` starts with the entry for `1.0.0` (`Initial release`). From then on, follow this document.
 
 ## 2. Structure
 

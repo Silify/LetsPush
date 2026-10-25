@@ -93,8 +93,9 @@ go build -ldflags "-X main.version=0.2.0" ./cmd/letspush
 letspush -version     # letspush 0.2.0
 ```
 
-The `Makefile` and the `Dockerfile` do not set it yet, so builds report `dev`. Wire it in (a build
-argument taken from the tag) before the first release, so that a running server can say what it is.
+`make build` sets it from the latest Git tag (`git describe`, without the `v`), or from `make build VERSION=…`.
+The Docker image takes it from the `VERSION` build argument, which `docker-compose.yml` reads from `.env`
+(`VERSION=1.1.0`); without it the image reports `dev`.
 
 `web/package.json` has its own `version` (`0.1.0`). It is not the release version and is not kept in step;
 leave it alone.
