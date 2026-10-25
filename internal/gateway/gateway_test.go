@@ -286,3 +286,77 @@ func TestRegisterAndRemove(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func (e *env) sendTracked(token string) (Receipt, error) {
+	return e.service.SendTracked(context.Background(), e.app, e.key, Message{Token: token, Notification: Notification{Title: "t"}})
+}
+
+func (e *env) deliveryStatus(id string) string {
+	e.t.Helper()
+	d, err := e.store.DeliveryByID(e.key.ID, id)
+	if err != nil {
+		e.t.Fatalf("no delivery %q: %v", id, err)
+	}
+	return d.Status
+}
+
+func TestATrackedSendReturnsAnIDAndRecordsHowItEnded(t *testing.T) {
+	t.Run("sent", func(t *testing.T) {
+		e := newEnv(t, store.PermAll, time.Second)
+		r, err := e.sendTracked("T")
+		if err != nil || r.Status != Sent || !strings.HasPrefix(r.ID, "ntf_") {
+			t.Fatalf("got %+v, %v", r, err)
+		}
+		if got := e.deliveryStatus(r.ID); got != "sent" {
+			t.Fatalf("recorded %q", got)
+		}
+	})
+	t.Run("a dead device", func(t *testing.T) {
+		e := newEnv(t, store.PermAll, time.Second)
+		e.provider.err = ErrUnregistered
+		r, err := e.sendTracked("T")
+		if !errors.Is(err, ErrUnregistered) || r.ID == "" {
+			t.Fatalf("got %+v, %v", r, err)
+		}
+		if got := e.deliveryStatus(r.ID); got != "unregistered" {
+			t.Fatalf("recorded %q", got)
+		}
+	})
+	t.Run("a refusal", func(t *testing.T) {
+		e := newEnv(t, store.PermAll, time.Second)
+		e.provider.err = errors.New("refused")
+		r, err := e.sendTracked("T")
+		if !errors.Is(err, ErrDelivery) {
+			t.Fatalf("got %+v, %v", r, err)
+		}
+		if got := e.deliveryStatus(r.ID); got != "failed" {
+			t.Fatalf("recorded %q", got)
+		}
+	})
+	t.Run("a slow one is pending, then sent", func(t *testing.T) {
+		e := newEnv(t, store.PermAll, 20*time.Millisecond)
+		e.provider.release = make(chan struct{})
+		r, err := e.sendTracked("T")
+		if err != nil || r.Status != Pending {
+			t.Fatalf("got %+v, %v", r, err)
+		}
+		if got := e.deliveryStatus(r.ID); got != "pending" {
+			t.Fatalf("recorded %q while pending", got)
+		}
+		close(e.provider.release)
+		e.service.Wait()
+		if got := e.deliveryStatus(r.ID); got != "sent" {
+			t.Fatalf("recorded %q after the delivery", got)
+		}
+	})
+}
+
+func TestAnUntrackedSendRecordsNoDelivery(t *testing.T) {
+	e := newEnv(t, store.PermAll, time.Second)
+	if _, err := e.send("T"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.store.DeliveryByID(e.key.ID, "anything"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("unexpected delivery")
+	}
+}

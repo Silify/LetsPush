@@ -5,6 +5,8 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -85,6 +87,8 @@ type Store interface {
 	UpsertToken(store.Token) (created bool, err error)
 	DeleteToken(keyID int64, token string) error
 	AddLog(appID int64, action, info string) error
+	AddDelivery(store.Delivery) error
+	SetDeliveryStatus(id, status string) error
 }
 
 // Opener opens the sealed provider keys.
@@ -193,7 +197,17 @@ const (
 	// Pending means the push service had not answered in time. The delivery carries on in the
 	// background, and its outcome goes to the log.
 	Pending Status = "pending"
+	// Failed and Unregistered are how a tracked delivery can end besides Sent: the push service
+	// refused it, or no longer knows the device.
+	Failed       Status = "failed"
+	Unregistered Status = "unregistered"
 )
+
+// Receipt is what a tracked send hands back: an ID to ask about the delivery later, and how far it got.
+type Receipt struct {
+	ID     string
+	Status Status
+}
 
 // Send delivers a notification to a device. A device the key has not registered yet is registered
 // first, if the key may.
@@ -202,16 +216,37 @@ const (
 // a refusal) when it is quick. When it is slow, Send answers Pending and the delivery finishes on its
 // own: a caller that gives up and hangs up does not cancel it.
 func (s *Service) Send(ctx context.Context, app store.App, key store.AccessKey, msg Message) (Status, error) {
+	receipt, err := s.send(ctx, app, key, msg, false)
+	return receipt.Status, err
+}
+
+// SendTracked is Send for callers that want to ask about the delivery afterwards. It records the delivery
+// and returns its ID, also when the send fails quickly. The record holds no message text.
+func (s *Service) SendTracked(ctx context.Context, app store.App, key store.AccessKey, msg Message) (Receipt, error) {
+	return s.send(ctx, app, key, msg, true)
+}
+
+func (s *Service) send(ctx context.Context, app store.App, key store.AccessKey, msg Message, track bool) (Receipt, error) {
 	if !key.Can(store.PermSendNotification) {
-		return "", ErrNoPermission
+		return Receipt{}, ErrNoPermission
 	}
 	device, err := s.deviceOf(app, key, msg)
 	if err != nil {
-		return "", err
+		return Receipt{}, err
 	}
 	provider, credentials, err := s.providerFor(ctx, app, device.Device)
 	if err != nil {
-		return "", err
+		return Receipt{}, err
+	}
+
+	var id string
+	if track {
+		id = newDeliveryID()
+		if err := s.store.AddDelivery(store.Delivery{
+			ID: id, AppID: app.ID, KeyID: key.ID, Status: string(Pending), RequestID: reqid.From(ctx),
+		}); err != nil {
+			return Receipt{}, err
+		}
 	}
 
 	done := make(chan error, 1)
@@ -220,7 +255,9 @@ func (s *Service) Send(ctx context.Context, app store.App, key store.AccessKey, 
 		defer s.running.Done()
 		sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
 		defer cancel()
-		done <- s.deliver(sendCtx, app, key, device, provider, credentials, msg.Notification)
+		err := s.deliver(sendCtx, app, key, device, provider, credentials, msg.Notification)
+		s.finish(id, err)
+		done <- err
 	}()
 
 	timer := time.NewTimer(s.wait)
@@ -228,13 +265,34 @@ func (s *Service) Send(ctx context.Context, app store.App, key store.AccessKey, 
 	select {
 	case err := <-done:
 		if err != nil {
-			return "", err
+			return Receipt{ID: id}, err
 		}
-		return Sent, nil
+		return Receipt{ID: id, Status: Sent}, nil
 	case <-timer.C:
 	case <-ctx.Done():
 	}
-	return Pending, nil
+	return Receipt{ID: id, Status: Pending}, nil
+}
+
+// finish records how a tracked delivery ended. [id] is empty for deliveries that are not tracked.
+func (s *Service) finish(id string, err error) {
+	if id == "" {
+		return
+	}
+	status := Sent
+	switch {
+	case errors.Is(err, ErrUnregistered):
+		status = Unregistered
+	case err != nil:
+		status = Failed
+	}
+	_ = s.store.SetDeliveryStatus(id, string(status))
+}
+
+func newDeliveryID() string {
+	b := make([]byte, 12)
+	_, _ = rand.Read(b)
+	return "ntf_" + hex.EncodeToString(b)
 }
 
 // deviceOf finds the device a message is for, registering it when the key may.

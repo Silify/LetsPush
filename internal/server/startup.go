@@ -39,6 +39,11 @@ func PurgeLogs(ctx context.Context, s *store.Store, retentionDays int, every tim
 		} else if n > 0 {
 			slog.Info("purged old log entries", "count", n)
 		}
+		if n, err := s.PurgeDeliveries(cutoff); err != nil {
+			slog.Error("could not purge old deliveries", "error", err)
+		} else if n > 0 {
+			slog.Info("purged old deliveries", "count", n)
+		}
 	}
 	purge()
 	ticker := time.NewTicker(every)
