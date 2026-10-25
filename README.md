@@ -145,6 +145,18 @@ cd web && npm run dev   # the interface, proxied to a running server on :8080
 
 The interface (`web/`, Svelte and Vite) builds into `internal/webui/dist`, which the binary embeds.
 
+## Compatibility and credits
+
+LetsPush speaks the HTTP API of [AirNotifier](https://github.com/dcai/airnotifier) (by Dongsheng Cai and
+contributors, BSD licensed), so that what works with AirNotifier, such as Moodle's `message_airnotifier`
+plugin, works with LetsPush by changing its server address. It is a separate program, written in Go, with its
+own design and storage, and it is not affiliated with or endorsed by AirNotifier or Moodle. The names belong
+to their owners.
+
+Where LetsPush answers differently on purpose: a device token belongs to the access key that registered it,
+Firebase keys are stored encrypted, and APNs and the other platforms AirNotifier supports are not here yet
+(everything goes through Firebase).
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
