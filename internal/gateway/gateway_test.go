@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Silify/letspush/internal/reqid"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/store"
 )
@@ -178,6 +179,20 @@ func TestSendOutcomes(t *testing.T) {
 			t.Fatalf("unexpected log %+v", log)
 		}
 	})
+}
+
+func TestAFailureInTheActivityLogNamesTheRequest(t *testing.T) {
+	e := newEnv(t, store.PermAll, time.Second)
+	e.provider.err = errors.New("firebase send failed with status 403: PERMISSION_DENIED: no")
+
+	ctx := reqid.With(context.Background(), "req-7")
+	if _, err := e.service.Send(ctx, e.app, e.key, Message{Token: "T"}); !errors.Is(err, ErrDelivery) {
+		t.Fatalf("got %v", err)
+	}
+	log := e.lastLog()
+	if !strings.Contains(log.Info, "PERMISSION_DENIED") || !strings.HasSuffix(log.Info, "(request req-7)") {
+		t.Fatalf("unexpected log %+v", log)
+	}
 }
 
 func TestASlowProviderMakesSendAnswerPendingAndTheDeliveryFinishesAlone(t *testing.T) {

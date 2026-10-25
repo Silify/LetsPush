@@ -12,8 +12,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	mrand "math/rand/v2"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,19 +26,32 @@ const (
 	defaultSendBase = "https://fcm.googleapis.com"
 	scope           = "https://www.googleapis.com/auth/firebase.messaging"
 	refreshMargin   = time.Minute
+
+	defaultAttempts = 3
+	retryBase       = 300 * time.Millisecond
+	retryCap        = 10 * time.Second
+	reasonLimit     = 300
 )
 
 // ErrUnregistered means Firebase no longer knows the device token.
 var ErrUnregistered = errors.New("unregistered token")
 
-// Error is a refusal from Google. It carries no Google text, only the status.
+// Error is a refusal from Google.
 type Error struct {
 	Status int
 	Stage  string // "sign-in" or "send"
+	// Reason is Google's own explanation, shortened, such as "PERMISSION_DENIED: Cloud Messaging API has not
+	// been used in project…". It is for the log; it never goes back to the site that sent the push.
+	Reason string
+
+	retryAfter time.Duration
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("firebase %s failed with status %d", e.Stage, e.Status)
+	if e.Reason == "" {
+		return fmt.Sprintf("firebase %s failed with status %d", e.Stage, e.Status)
+	}
+	return fmt.Sprintf("firebase %s failed with status %d: %s", e.Stage, e.Status, e.Reason)
 }
 
 // Message is one notification for one device.
@@ -52,6 +68,10 @@ type Client struct {
 	TokenURL string
 	SendBase string
 	Now      func() time.Time
+	// Attempts is how many times a send is tried when Google is busy or unreachable. Default 3.
+	Attempts int
+	// Sleep waits between attempts. It returns early with an error when ctx ends. Default: a timer.
+	Sleep func(ctx context.Context, d time.Duration) error
 
 	mu      sync.Mutex
 	cache   map[string]*cachedToken
@@ -76,19 +96,33 @@ func NewClient() *Client {
 		TokenURL: defaultTokenURL,
 		SendBase: defaultSendBase,
 		Now:      time.Now,
+		Attempts: defaultAttempts,
+		Sleep:    sleep,
 		cache:    map[string]*cachedToken{},
 		pending:  map[string]*pendingToken{},
 	}
 }
 
 // Send delivers a message. It returns ErrUnregistered for a dead device, and *Error for other refusals.
+// A busy Google (429, 5xx), a network failure or an expired access token is retried with a growing pause.
 func (c *Client) Send(ctx context.Context, creds Credentials, msg Message) error {
-	token, err := c.accessToken(ctx, creds)
+	payload, err := json.Marshal(map[string]any{"message": buildMessage(msg)})
 	if err != nil {
 		return err
 	}
+	for attempt := 1; ; attempt++ {
+		err = c.sendOnce(ctx, creds, payload)
+		if err == nil || attempt >= c.Attempts || !retryable(ctx, err) {
+			return err
+		}
+		if c.Sleep(ctx, backoff(attempt, err)) != nil {
+			return err
+		}
+	}
+}
 
-	payload, err := json.Marshal(map[string]any{"message": buildMessage(msg)})
+func (c *Client) sendOnce(ctx context.Context, creds Credentials, payload []byte) error {
+	token, err := c.accessToken(ctx, creds)
 	if err != nil {
 		return err
 	}
@@ -116,7 +150,99 @@ func (c *Client) Send(ctx context.Context, creds Credentials, msg Message) error
 	if isUnregistered(resp.StatusCode, body) {
 		return ErrUnregistered
 	}
-	return &Error{Status: resp.StatusCode, Stage: "send"}
+	return &Error{Status: resp.StatusCode, Stage: "send", Reason: reasonOf(body), retryAfter: retryAfter(resp)}
+}
+
+// retryable says whether another attempt could succeed: Google is busy or failing, the network dropped
+// the request, or the access token was refused (the next attempt asks for a fresh one).
+func retryable(ctx context.Context, err error) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	var apiErr *Error
+	if errors.As(err, &apiErr) {
+		s := apiErr.Status
+		return s == http.StatusTooManyRequests || s >= 500 || (s == http.StatusUnauthorized && apiErr.Stage == "send")
+	}
+	var netErr *url.Error
+	return errors.As(err, &netErr)
+}
+
+// backoff is the pause before attempt+1: doubling from 300 ms with up to half again as jitter, or what
+// Google asked for in Retry-After if that is longer.
+func backoff(attempt int, err error) time.Duration {
+	d := retryBase << (attempt - 1)
+	d = d/2 + mrand.N(d)
+	var apiErr *Error
+	if errors.As(err, &apiErr) && apiErr.retryAfter > d {
+		d = apiErr.retryAfter
+	}
+	return min(d, retryCap)
+}
+
+func retryAfter(resp *http.Response) time.Duration {
+	seconds, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+	if err != nil || seconds < 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// reasonOf pulls Google's explanation out of an error reply, for the log. Google's replies carry no
+// secrets, only the status, a message and sometimes an error code.
+func reasonOf(body []byte) string {
+	var reply struct {
+		// FCM: {"error": {"status", "message", "details": [{"errorCode"}]}}
+		// Sign-in: {"error": "invalid_grant", "error_description": "..."}
+		Error json.RawMessage `json:"error"`
+		Desc  string          `json:"error_description"`
+	}
+	if json.Unmarshal(body, &reply) != nil || len(reply.Error) == 0 {
+		return ""
+	}
+
+	var code, message string
+	var plain string
+	if json.Unmarshal(reply.Error, &plain) == nil {
+		code, message = plain, reply.Desc
+	} else {
+		var object struct {
+			Status  string `json:"status"`
+			Message string `json:"message"`
+			Details []struct {
+				ErrorCode string `json:"errorCode"`
+			} `json:"details"`
+		}
+		if json.Unmarshal(reply.Error, &object) != nil {
+			return ""
+		}
+		code, message = object.Status, object.Message
+		for _, d := range object.Details {
+			if d.ErrorCode != "" && d.ErrorCode != code {
+				code += "/" + d.ErrorCode
+				break
+			}
+		}
+	}
+
+	reason := strings.TrimSpace(code + ": " + strings.Join(strings.Fields(message), " "))
+	reason = strings.Trim(reason, ": ")
+	runes := []rune(reason)
+	if len(runes) > reasonLimit {
+		reason = string(runes[:reasonLimit]) + "…"
+	}
+	return reason
 }
 
 func isUnregistered(status int, body []byte) bool {
@@ -224,7 +350,8 @@ func (c *Client) requestToken(ctx context.Context, creds Credentials) (string, t
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", time.Time{}, &Error{Status: resp.StatusCode, Stage: "sign-in"}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+		return "", time.Time{}, &Error{Status: resp.StatusCode, Stage: "sign-in", Reason: reasonOf(body), retryAfter: retryAfter(resp)}
 	}
 
 	var reply struct {

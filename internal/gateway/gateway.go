@@ -7,10 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Silify/letspush/internal/reqid"
 	"github.com/Silify/letspush/internal/store"
 )
 
@@ -37,7 +39,7 @@ const (
 	defaultChannel = "default"
 
 	defaultWait    = 1500 * time.Millisecond
-	defaultTimeout = 30 * time.Second
+	defaultTimeout = 60 * time.Second
 )
 
 // Notification is what the person sees, plus the data the app receives.
@@ -83,7 +85,7 @@ type Config struct {
 	Providers map[string]Provider
 	// Wait is how long Send waits for the provider before it answers Pending. Default 1.5 seconds.
 	Wait time.Duration
-	// Timeout is how long a delivery may take in all. Default 30 seconds.
+	// Timeout is how long a delivery may take in all, retries included. Default 60 seconds.
 	Timeout time.Duration
 }
 
@@ -192,7 +194,7 @@ func (s *Service) Send(ctx context.Context, app store.App, key store.AccessKey, 
 	if err != nil {
 		return "", err
 	}
-	provider, credentials, err := s.providerFor(app, device.Device)
+	provider, credentials, err := s.providerFor(ctx, app, device.Device)
 	if err != nil {
 		return "", err
 	}
@@ -241,7 +243,7 @@ func (s *Service) deviceOf(app store.App, key store.AccessKey, msg Message) (sto
 }
 
 // providerFor picks the push service for a device and opens the app's key for it.
-func (s *Service) providerFor(app store.App, device string) (Provider, []byte, error) {
+func (s *Service) providerFor(ctx context.Context, app store.App, device string) (Provider, []byte, error) {
 	kind := kindFor(device)
 	provider := s.providers[kind]
 	if provider == nil {
@@ -256,7 +258,7 @@ func (s *Service) providerFor(app store.App, device string) (Provider, []byte, e
 	}
 	credentials, err := s.opener.Open(stored.Credentials)
 	if err != nil {
-		_ = s.store.AddLog(app.ID, "error", "the app's key could not be opened: "+err.Error())
+		_ = s.store.AddLog(app.ID, "error", withRequestID(ctx, "the app's key could not be opened: "+err.Error()))
 		return nil, nil, ErrNoProvider
 	}
 	return provider, credentials, nil
@@ -276,11 +278,21 @@ func (s *Service) deliver(ctx context.Context, app store.App, key store.AccessKe
 	case errors.Is(err, ErrUnregistered):
 		_ = s.store.DeleteToken(key.ID, device.Token)
 		_ = s.store.AddLog(app.ID, "push", fmt.Sprintf("%s is no longer registered; removed", shortToken(device.Token)))
+		slog.InfoContext(ctx, "device is no longer registered; removed", "app", app.Name, "device", shortToken(device.Token))
 		return ErrUnregistered
 	default:
-		_ = s.store.AddLog(app.ID, "error", fmt.Sprintf("sending to %s failed: %s", shortToken(device.Token), err))
+		// The request ID in the activity log lets an admin find the server's own log lines for it.
+		_ = s.store.AddLog(app.ID, "error", withRequestID(ctx, fmt.Sprintf("sending to %s failed: %s", shortToken(device.Token), err)))
+		slog.WarnContext(ctx, "delivery failed", "app", app.Name, "device", shortToken(device.Token), "error", err)
 		return fmt.Errorf("%w: %v", ErrDelivery, err)
 	}
+}
+
+func withRequestID(ctx context.Context, text string) string {
+	if id := reqid.From(ctx); id != "" {
+		return text + " (request " + id + ")"
+	}
+	return text
 }
 
 // shortToken is enough of a token to recognise it in the log without keeping the whole device address:

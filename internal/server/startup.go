@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/Silify/letspush/internal/secret"
@@ -35,9 +35,9 @@ func PurgeLogs(ctx context.Context, s *store.Store, retentionDays int, every tim
 	purge := func() {
 		cutoff := time.Now().AddDate(0, 0, -retentionDays)
 		if n, err := s.PurgeLogs(cutoff); err != nil {
-			log.Printf("could not purge the log: %v", err)
+			slog.Error("could not purge the log", "error", err)
 		} else if n > 0 {
-			log.Printf("purged %d old log entries", n)
+			slog.Info("purged old log entries", "count", n)
 		}
 	}
 	purge()

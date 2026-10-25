@@ -110,8 +110,14 @@ func (s *Store) RevokeKey(appID, keyID int64) error {
 	return tx.Commit()
 }
 
-// TouchKey records that a key was just used.
+// touchEvery is how often a key's last use is written. A busy site sends many requests a minute, and
+// the date only has to be roughly right.
+const touchEvery = time.Minute
+
+// TouchKey records that a key was just used, unless that was already recorded within the last minute.
 func (s *Store) TouchKey(id int64) error {
-	_, err := s.db.Exec(`UPDATE access_keys SET last_used_at = ? WHERE id = ?`, s.unix(), id)
+	now := s.unix()
+	_, err := s.db.Exec(`UPDATE access_keys SET last_used_at = ? WHERE id = ? AND (last_used_at IS NULL OR last_used_at <= ?)`,
+		now, id, now-int64(touchEvery.Seconds()))
 	return err
 }

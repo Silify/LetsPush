@@ -19,6 +19,14 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Addr != "127.0.0.1:8080" || cfg.DatabasePath != "./data/letspush.db" || cfg.LogRetentionDays != 30 {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
+	if cfg.LogFormat != "text" {
+		t.Fatalf("the log should be text by default, got %q", cfg.LogFormat)
+	}
+
+	cfg, err = Load(env(map[string]string{"LETSPUSH_SECRET": secret, "LETSPUSH_LOG_FORMAT": " JSON "}))
+	if err != nil || cfg.LogFormat != "json" {
+		t.Fatalf("json log format not read: %v %q", err, cfg.LogFormat)
+	}
 }
 
 func TestLoadRefusesBadSettings(t *testing.T) {
@@ -30,6 +38,7 @@ func TestLoadRefusesBadSettings(t *testing.T) {
 		"short password":     {"LETSPUSH_SECRET": secret, "LETSPUSH_ADMIN_EMAIL": "a@b.c", "LETSPUSH_ADMIN_PASSWORD": "short"},
 		"bad retention":      {"LETSPUSH_SECRET": secret, "LETSPUSH_LOG_RETENTION_DAYS": "0"},
 		"text retention":     {"LETSPUSH_SECRET": secret, "LETSPUSH_LOG_RETENTION_DAYS": "soon"},
+		"unknown log format": {"LETSPUSH_SECRET": secret, "LETSPUSH_LOG_FORMAT": "xml"},
 	}
 	for name, values := range cases {
 		if _, err := Load(env(values)); err == nil {

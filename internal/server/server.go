@@ -2,7 +2,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +10,7 @@ import (
 	"github.com/Silify/letspush/internal/admin"
 	"github.com/Silify/letspush/internal/compat"
 	"github.com/Silify/letspush/internal/gateway"
+	"github.com/Silify/letspush/internal/reqid"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/store"
 	"github.com/Silify/letspush/internal/webui"
@@ -53,7 +54,7 @@ func New(o Options) (http.Handler, error) {
 	}
 	mux.Handle("/", o.UI)
 
-	return chain(mux, recoverPanics, securityHeaders, accessLog), nil
+	return chain(mux, requestID, recoverPanics, securityHeaders, accessLog), nil
 }
 
 type middleware func(http.Handler) http.Handler
@@ -65,12 +66,22 @@ func chain(h http.Handler, layers ...middleware) http.Handler {
 	return h
 }
 
+// requestID gives the request an ID, taken from the caller's X-Request-Id header when it is fit to be
+// logged, and sends it back in the answer. Every log line about the request carries it.
+func requestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := reqid.Accept(r.Header.Get("X-Request-Id"))
+		w.Header().Set("X-Request-Id", id)
+		next.ServeHTTP(w, r.WithContext(reqid.With(r.Context(), id)))
+	})
+}
+
 // recoverPanics keeps one bad request from taking the server down.
 func recoverPanics(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				log.Printf("panic while serving %s: %v", logPath(r), recovered)
+				slog.ErrorContext(r.Context(), "panic while serving a request", "path", logPath(r), "panic", recovered)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = w.Write([]byte(`{"error":"something went wrong"}`))
@@ -104,12 +115,21 @@ func (s *statusWriter) WriteHeader(code int) {
 }
 
 // accessLog writes one line per request: method, path, status and time. No headers, no bodies.
+// Server errors are logged as errors.
 func accessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)
-		log.Printf("%s %s %d %s", r.Method, logPath(r), sw.status, time.Since(start).Round(time.Millisecond))
+		level := slog.LevelInfo
+		if sw.status >= http.StatusInternalServerError {
+			level = slog.LevelError
+		}
+		slog.LogAttrs(r.Context(), level, "request",
+			slog.String("method", r.Method),
+			slog.String("path", logPath(r)),
+			slog.Int("status", sw.status),
+			slog.Int64("duration_ms", time.Since(start).Milliseconds()))
 	})
 }
 

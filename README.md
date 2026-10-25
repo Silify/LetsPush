@@ -63,6 +63,7 @@ All through the environment.
 | `LETSPUSH_DB` | `./data/letspush.db` | The SQLite file. Back it up. |
 | `LETSPUSH_ADMIN_EMAIL`, `LETSPUSH_ADMIN_PASSWORD` | — | Create the first admin if there is none. Password: 10 characters or more. |
 | `LETSPUSH_LOG_RETENTION_DAYS` | `30` | How long the activity log is kept. |
+| `LETSPUSH_LOG_FORMAT` | `text` | How the server writes its own log to standard error: `text` or `json`. |
 
 ## Connecting Moodle
 
@@ -77,7 +78,7 @@ In Moodle, *Site administration → Messaging → Mobile*, set the push server f
 | Mobile app name | the mobile app's package id |
 
 Then enable the mobile notifications output under *Plugins → Message outputs*. Moodle's own health check
-on that page will confirm the address and the key.
+on that page flags a wrong address or a wrong key.
 
 Moodle blocks requests to private addresses and to ports other than 80 and 443 by default; if the server
 is on a private network, allow its host and port under *Site administration → General → Security → HTTP
@@ -106,6 +107,15 @@ How a push becomes a notification:
 - `alert` as text: used as title and body. As an object: its `title` and `body`.
 - `alert: null`, or no text at all: a data-only message, which Moodle uses for encrypted notifications.
 - All of `extra` (and `fcm.data` on top) goes to the app as the message's data, as strings.
+
+Delivery: LetsPush waits up to 1.5 seconds for Firebase and answers with the real result (a dead device is
+`404 Unregistered token`). If Firebase is slower, it answers `202` and finishes the delivery on its own, so a
+caller that gives up does not lose the notification. A busy or unreachable Firebase (429, 5xx, dropped
+connection) is retried up to three times with a growing pause. Firebase's own explanation of a refusal, for
+example `PERMISSION_DENIED`, goes to the app's activity log, never back to the site.
+
+Every answer carries an `X-Request-Id`. Send your own `X-Request-Id` to follow a request, or take the one in
+the answer and search the server's log (and the activity log, for failures) for it.
 
 A device token belongs to the access key that registered it. A key can only send to its own devices, and a
 revoked key's devices go with it. An unknown token is registered on first use if the key may.
