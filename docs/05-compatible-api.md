@@ -1,10 +1,10 @@
 # Compatible API
 
-The HTTP API that LetsPush shares with [AirNotifier](https://github.com/dcai/airnotifier), as Moodle's
+The HTTP API that Let's Push shares with [AirNotifier](https://github.com/dcai/airnotifier), as Moodle's
 `message_airnotifier` plugin uses it. This is the reference for what it accepts and answers. The code is
 in `internal/compat`; the tests that pin it are in `internal/compat/moodle_test.go`.
 
-A site that works with AirNotifier works with LetsPush by changing its server address, app name and
+A site that works with AirNotifier works with Let's Push by changing its server address, app name and
 access key. Changes here must keep that true; see [Changing this API](#changing-this-api).
 
 ## Authentication
@@ -13,7 +13,7 @@ Every request carries two headers:
 
 | Header           | Value                                                    |
 |------------------|----------------------------------------------------------|
-| `X-AN-APP-NAME`  | The app's name in LetsPush                               |
+| `X-AN-APP-NAME`  | The app's name in Let's Push                               |
 | `X-AN-APP-KEY`   | An access key of that app                                |
 
 `X-AN-APP-KEY` may be omitted only for `POST /accesskeys/` (Moodle sends the text `none` there; it is
@@ -94,7 +94,7 @@ Answers:
 | `503`  | `This app has no working Firebase key`                          | The app has no key, or it cannot be opened                            |
 | `500`  | `something went wrong`                                          | A bug or a storage failure                                            |
 
-**Timing.** Moodle waits two seconds. LetsPush waits up to 1.5 seconds for Firebase and answers with
+**Timing.** Moodle waits two seconds. Let's Push waits up to 1.5 seconds for Firebase and answers with
 its real result; if Firebase is slower it answers `202` and finishes the delivery on its own. A device
 found dead after that is still removed, but Moodle is not told. See
 [Architecture](03-architecture.md#6-delivery-waiting-retrying-and-errors).
@@ -115,9 +115,9 @@ using `device` and `channel` from the body.
 
 The Android and iOS parts of the Firebase message are set to high priority.
 
-## Where LetsPush differs from AirNotifier
+## Where Let's Push differs from AirNotifier
 
-| Topic                        | AirNotifier                         | LetsPush                                               |
+| Topic                        | AirNotifier                         | Let's Push                                               |
 |------------------------------|-------------------------------------|--------------------------------------------------------|
 | Who owns a device            | The app                             | The access key that registered it                      |
 | Requesting an access key     | Checks the site on moodle.net       | Allowed per app by an administrator; no outside check  |

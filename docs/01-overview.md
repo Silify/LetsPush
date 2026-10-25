@@ -1,16 +1,16 @@
 # Overview
 
-## What LetsPush is
+## What Let's Push is
 
-LetsPush is a small **push notification gateway**. Websites and apps send it notifications over a
+Let's Push is a small **push notification gateway**. Websites and apps send it notifications over a
 simple HTTP API, and it delivers them to phones and browsers through Firebase Cloud Messaging (FCM).
 
 It speaks the API of [AirNotifier](https://github.com/dcai/airnotifier), the gateway that
-**Moodle's mobile notifications** are built for. A Moodle site can therefore send through LetsPush
+**Moodle's mobile notifications** are built for. A Moodle site can therefore send through Let's Push
 with no plugin and no change to Moodle: its administrator fills in a few settings. See
 [Compatible API](05-compatible-api.md).
 
-AirNotifier is the model for what LetsPush does, not for how. LetsPush is a separate program, written
+AirNotifier is the model for what Let's Push does, not for how. Let's Push is a separate program, written
 in Go, with a cleaner structure, tighter security defaults and room to grow: more kinds of sites and more
 push services. It also has an API of its own, for new integrations that want to send a title, a body, an
 image and data, and to ask how a delivery ended. See [Native API](11-native-api.md).
@@ -20,7 +20,7 @@ image and data, and to ask how a delivery ended. See [Native API](11-native-api.
 - **Moodle administrators** who need a push gateway for their mobile app and want something small to
   run and easy to reason about.
 - **Operators** who host a gateway for several sites or apps and want one place to manage them.
-- **Developers** who add a push service, a database or an API to LetsPush.
+- **Developers** who add a push service, a database or an API to Let's Push.
 
 ## What it does
 
@@ -30,8 +30,8 @@ image and data, and to ask how a delivery ended. See [Native API](11-native-api.
   devices.
 - **Access keys per site**, with permissions (register devices, remove devices, send). A key reaches
   only the devices it registered itself.
-- **A web interface** to create apps, upload Firebase keys, create and revoke access keys, and read each
-  app's activity log.
+- **A web dashboard**, light or dark, to create apps, upload Firebase keys, create and revoke access keys,
+  see each app's devices and read its activity log.
 - **Reliable delivery.** A busy or unreachable Firebase is retried; a slow one never loses a
   notification; a dead device is removed and reported the way Moodle expects.
 - **Traceable.** Every request has an ID that appears in the server log and in the activity log. When
@@ -48,7 +48,7 @@ image and data, and to ask how a delivery ended. See [Native API](11-native-api.
 
 ## Platforms
 
-LetsPush runs anywhere Go or Docker does. What it can deliver to depends on Firebase:
+Let's Push runs anywhere Go or Docker does. What it can deliver to depends on Firebase:
 
 | Device  | Status                                                                |
 |---------|-----------------------------------------------------------------------|
@@ -85,7 +85,7 @@ These drive most decisions; the reasoning is in [Architecture](03-architecture.m
 
 ## Status
 
-LetsPush is early. The Moodle-compatible API and the web interface work and are tested. What is not
+Let's Push is early. The Moodle-compatible API and the web interface work and are tested. What is not
 done is listed as non-goals in [Architecture](03-architecture.md#10-deliberate-non-goals).
 
 ## Documentation map
@@ -100,7 +100,7 @@ done is listed as non-goals in [Architecture](03-architecture.md#10-deliberate-n
 | [Operations](06-operations.md)                         | Deploy, back up, upgrade and troubleshoot a server  |
 | [Git conventions](07-git-conventions.md)               | Branch, commit and review the way the team does     |
 | [Naming conventions](08-naming-conventions.md)         | Name files, types and members consistently          |
-| [Versioning conventions](09-versioning-conventions.md) | Version and release LetsPush                        |
+| [Versioning conventions](09-versioning-conventions.md) | Version and release Let's Push                        |
 | [Changelog conventions](10-changelog-conventions.md)   | Record notable changes for each release             |
 
 ---

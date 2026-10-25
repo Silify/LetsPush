@@ -1,4 +1,4 @@
-// Package native serves LetsPush's own API, under /v1: register devices, send notifications with a title,
+// Package native serves Let's Push's own API, under /v1: register devices, send notifications with a title,
 // body, image and data, and ask how a delivery ended. It is the API for new integrations; the Moodle-compatible
 // one is in package compat.
 package native

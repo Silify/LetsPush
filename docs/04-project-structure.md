@@ -1,6 +1,6 @@
 # Project Structure
 
-Where code lives in LetsPush, which packages may import which, and how to decide where something new
+Where code lives in Let's Push, which packages may import which, and how to decide where something new
 goes. The design behind it is in [Architecture](03-architecture.md).
 
 ## 1. Mindset
@@ -12,7 +12,7 @@ goes. The design behind it is in [Architecture](03-architecture.md).
 - **Add by adding.** A new API, push service or database is a new package plus one line in the wiring.
 - **No premature layers.** Do not add a folder, interface or type for a second implementation that does
   not exist yet. Add it when the second one arrives.
-- **Everything is `internal/`.** LetsPush is a program, not a library. Nothing outside the module may
+- **Everything is `internal/`.** Let's Push is a program, not a library. Nothing outside the module may
   import its packages.
 
 ## 2. The big picture
@@ -22,7 +22,7 @@ cmd/letspush/        the program: reads settings, wires the pieces, runs the ser
 internal/
   server/            composition: routes, middleware, startup helpers
   compat/            adapter: the AirNotifier / Moodle-compatible API
-  native/            adapter: LetsPush's own API, /v1
+  native/            adapter: Let's Push's own API, /v1
   admin/             adapter: the JSON API behind the web interface
   webui/             serves the built web interface (embedded)
   gateway/           the core: devices, permissions, delivery
@@ -87,7 +87,7 @@ decisions only about the **wire format**; rules belong in the gateway. Tests inc
 
 ### `internal/native/`
 
-LetsPush's own API under `/v1`: `handler.go` (routes, Bearer authentication, the one error shape),
+Let's Push's own API under `/v1`: `handler.go` (routes, Bearer authentication, the one error shape),
 `devices.go`, and `notifications.go` (validating a request and turning it into a `gateway.Notification`).
 Its rules about what a request may contain live here, as they are about the wire format; who may send and
 what happens to a delivery live in the gateway. See [Native API](11-native-api.md).
@@ -137,11 +137,13 @@ The web interface, plain JavaScript with Svelte 5.
 
 ```text
 web/src/
-  main.js, App.svelte, app.css   entry, shell, theme (design tokens as CSS variables)
-  pages/                         one file per screen: Login, Apps, AppDetail, Account…
-  components/                    app-specific pieces: Topbar, Logo, CopyBox
+  main.js, App.svelte, app.css   entry, sign-in gate and page loader, theme (design tokens as CSS variables)
+  pages/                         one file per screen: Login, Overview, Apps, Activity, Account, AppPage
+  pages/app/                     the tabs of one app: Overview, Keys, Devices, Activity, Firebase, Connect, Settings
+  components/                    app-specific pieces: Shell, Nav, ThemeToggle, PageHeader, LogList, StatCard…
   lib/api.js                     the only place that calls /admin/api
-  lib/router.svelte.js           the small router
+  lib/router.svelte.js           the small router (#/apps/3/devices)
+  lib/apps.svelte.js             the list of apps, loaded once and shared by the sidebar and the pages
   lib/components/ui/             shadcn-svelte components (generated; edit with care)
 web/components.json              settings of the shadcn-svelte CLI
 web/scripts/clean.mjs            empties the build folder, keeping .gitkeep
@@ -159,7 +161,7 @@ web/scripts/clean.mjs            empties the build folder, keeping .gitkeep
 | A new push service                                        | A new package implementing `gateway.Provider`            |
 | A new table or column                                     | A **new** migration in `store/migrations`, plus `store`  |
 | A new setting                                             | `config`, then document it in [Getting started](02-getting-started.md) |
-| A new admin screen                                        | `web/src/pages`, a call in `lib/api.js`, a handler in `admin` |
+| A new admin screen                                        | `web/src/pages` (a tab of an app: `pages/app`), a call in `lib/api.js`, a handler in `admin` |
 | A new setting an app owns                                 | `apps` column (migration), `store`, `admin`, the app page |
 | A new log line about a request                            | `slog.*Context(ctx, …)` so it carries the request ID     |
 | Something used by two adapters                            | Probably `gateway`; if it is not a rule, `secret` or `reqid` |

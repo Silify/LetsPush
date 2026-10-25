@@ -323,7 +323,7 @@ feat(web): show the reason Firebase gave in the activity log
 fix(compat): accept a push with no extra object
 fix(store): write a key's last use at most once a minute
 
-docs(readme): explain where LetsPush differs from AirNotifier
+docs(readme): explain where Let's Push differs from AirNotifier
 docs: add the compatible API reference
 
 style: format the Go sources
@@ -361,7 +361,7 @@ Scopes are optional. Use the **package or area** the change is in, from this lis
 |-----------|-----------------------------------------------------------|
 | `gateway` | The core: devices, permissions, delivery                  |
 | `compat`  | The AirNotifier / Moodle-compatible API                   |
-| `native`  | LetsPush's own `/v1` API                                  |
+| `native`  | Let's Push's own `/v1` API                                  |
 | `admin`   | The admin JSON API (sign-in, apps, keys, log)             |
 | `fcm`     | The Firebase provider                                     |
 | `store`   | The database and migrations                               |
@@ -431,7 +431,7 @@ ordinary development builds.
 
 ### Build metadata
 
-LetsPush has no separate build number. The Git tag is the version (`v1.4.0`), and the Docker image or
+Let's Push has no separate build number. The Git tag is the version (`v1.4.0`), and the Docker image or
 binary built from it reports that version. See
 [Versioning conventions](09-versioning-conventions.md).
 
@@ -819,7 +819,7 @@ git push origin v0.2.0
 
 ## Notes on Adoption
 
-- LetsPush has a single deployable and a small team. Before the first release, work goes to `develop`
+- Let's Push has a single deployable and a small team. Before the first release, work goes to `develop`
   (commits or short branches), and `main` stays empty of unreleased work. Once there are users with
   data to protect, use the full model above. If it proves too heavy, the `develop` branch MAY be
   dropped in favor of short-lived branches off `main` (then `release/*` is optional and hotfixes

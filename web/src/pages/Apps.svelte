@@ -1,142 +1,80 @@
 <script>
+  import AppWindow from '@lucide/svelte/icons/app-window';
+  import KeyRound from '@lucide/svelte/icons/key-round';
+  import Plus from '@lucide/svelte/icons/plus';
+  import Search from '@lucide/svelte/icons/search';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
+  import EmptyState from '../components/EmptyState.svelte';
+  import NewAppDialog from '../components/NewAppDialog.svelte';
+  import PageHeader from '../components/PageHeader.svelte';
+  import StatusBadge from '../components/StatusBadge.svelte';
   import * as Alert from '$lib/components/ui/alert/index.js';
-  import { Badge } from '$lib/components/ui/badge/index.js';
   import { Button } from '$lib/components/ui/button/index.js';
   import * as Card from '$lib/components/ui/card/index.js';
-  import * as Dialog from '$lib/components/ui/dialog/index.js';
   import { Input } from '$lib/components/ui/input/index.js';
-  import { Label } from '$lib/components/ui/label/index.js';
-  import { Textarea } from '$lib/components/ui/textarea/index.js';
-  import { api } from '$lib/api.js';
-  import { go } from '$lib/router.svelte.js';
-  import { toast } from '$lib/toast.js';
+  import { Skeleton } from '$lib/components/ui/skeleton/index.js';
+  import { apps, loadApps } from '$lib/apps.svelte.js';
+  import { ago, count } from '$lib/format.js';
 
-  let apps = $state(null);
-  let error = $state('');
+  loadApps();
 
   let creating = $state(false);
-  let name = $state('');
-  let serviceAccount = $state('');
-  let busy = $state(false);
-  let formError = $state('');
+  let search = $state('');
 
-  async function load() {
-    try {
-      apps = await api.apps();
-    } catch (e) {
-      error = e.message;
-    }
-  }
-  load();
-
-  function open() {
-    name = '';
-    serviceAccount = '';
-    formError = '';
-    creating = true;
-  }
-
-  async function readFile(event) {
-    const file = event.target.files?.[0];
-    if (file) serviceAccount = await file.text();
-  }
-
-  async function create(event) {
-    event.preventDefault();
-    busy = true;
-    formError = '';
-    try {
-      const app = await api.createApp(name.trim(), serviceAccount.trim());
-      creating = false;
-      toast('App created');
-      go(`/apps/${app.id}`);
-    } catch (e) {
-      formError = e.message;
-    } finally {
-      busy = false;
-    }
-  }
+  const shown = $derived(
+    (apps.list ?? []).filter((app) => app.name.toLowerCase().includes(search.trim().toLowerCase())),
+  );
 </script>
 
-<main class="mx-auto grid max-w-3xl gap-6 px-4 py-8">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div class="grid gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">Apps</h1>
-      <p class="text-sm text-muted-foreground">Each app is one mobile app, with its own Firebase key and access keys.</p>
-    </div>
-    <Button onclick={open}>New app</Button>
+<PageHeader title="Apps" description="Each app is a mobile app with its own Firebase key, access keys and devices.">
+  {#snippet actions()}
+    <Button onclick={() => (creating = true)}><Plus data-icon="inline-start" />New app</Button>
+  {/snippet}
+</PageHeader>
+
+{#if apps.error}
+  <Alert.Root variant="destructive"><Alert.Description>{apps.error}</Alert.Description></Alert.Root>
+{:else if apps.list === null}
+  <div class="grid gap-3 sm:grid-cols-2">
+    {#each [0, 1] as card (card)}<Skeleton class="h-32 w-full" />{/each}
   </div>
-
-  {#if error}
-    <Alert.Root variant="destructive"><Alert.Description>{error}</Alert.Description></Alert.Root>
-  {:else if apps === null}
-    <p class="text-sm text-muted-foreground">Loading…</p>
-  {:else if apps.length === 0}
-    <Card.Root>
-      <Card.Content class="grid justify-items-center gap-3 py-10 text-center">
-        <h2 class="text-lg font-medium">No apps yet</h2>
-        <p class="max-w-sm text-sm text-muted-foreground">
-          Add the app you send notifications to. You will need its Firebase service-account key.
-        </p>
-        <Button onclick={open}>Create your first app</Button>
-      </Card.Content>
-    </Card.Root>
-  {:else}
-    {#each apps as app (app.id)}
-      <a href={`#/apps/${app.id}`} class="block rounded-xl transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-        <Card.Root>
-          <Card.Header>
-            <Card.Title>{app.name}</Card.Title>
-            <Card.Description>{app.projectId ? `Firebase project ${app.projectId}` : 'No Firebase key yet'}</Card.Description>
-            <Card.Action>
-              {#if app.hasCredentials}
-                <Badge>Ready to send</Badge>
-              {:else}
-                <Badge variant="outline">Needs a Firebase key</Badge>
-              {/if}
-            </Card.Action>
-          </Card.Header>
-          <Card.Content class="flex gap-8">
-            <div><div class="text-xl font-semibold tracking-tight">{app.keys}</div><div class="text-xs text-muted-foreground">access keys</div></div>
-            <div><div class="text-xl font-semibold tracking-tight">{app.tokens}</div><div class="text-xs text-muted-foreground">devices</div></div>
-          </Card.Content>
-        </Card.Root>
-      </a>
-    {/each}
+{:else if apps.list.length === 0}
+  <Card.Root>
+    <EmptyState icon={AppWindow} title="No apps yet" description="Create an app, give it its Firebase key, and sites can start sending notifications.">
+      <Button onclick={() => (creating = true)}><Plus data-icon="inline-start" />New app</Button>
+    </EmptyState>
+  </Card.Root>
+{:else}
+  {#if apps.list.length > 4}
+    <div class="relative mb-4 max-w-xs">
+      <Search class="pointer-events-none absolute start-2.5 top-2.5 size-4 text-muted-foreground" />
+      <Input class="ps-8" bind:value={search} placeholder="Search apps" aria-label="Search apps" />
+    </div>
   {/if}
-</main>
+  {#if shown.length === 0}
+    <p class="text-sm text-muted-foreground">No app matches “{search}”.</p>
+  {:else}
+    <div class="grid gap-3 sm:grid-cols-2">
+      {#each shown as app (app.id)}
+        <a href="#/apps/{app.id}" class="group block rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+          <Card.Root class="h-full transition-colors group-hover:bg-muted/40">
+            <Card.Header>
+              <Card.Title class="truncate">{app.name}</Card.Title>
+              <Card.Description class="truncate">
+                {app.hasCredentials ? `Firebase project ${app.projectId}` : 'No Firebase key yet'}
+              </Card.Description>
+              <Card.Action><StatusBadge ready={app.hasCredentials} /></Card.Action>
+            </Card.Header>
+            <Card.Content class="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
+              <span class="flex items-center gap-1.5"><KeyRound class="size-3.5" />{count(app.keys)} access keys</span>
+              <span class="flex items-center gap-1.5"><Smartphone class="size-3.5" />{count(app.tokens)} devices</span>
+              <span class="ms-auto text-xs">Created {ago(app.createdAt)}</span>
+            </Card.Content>
+          </Card.Root>
+        </a>
+      {/each}
+    </div>
+  {/if}
+{/if}
 
-<Dialog.Root bind:open={creating}>
-  <Dialog.Content class="sm:max-w-lg">
-    <Dialog.Header>
-      <Dialog.Title>New app</Dialog.Title>
-      <Dialog.Description>An app is one mobile app that notifications are sent to.</Dialog.Description>
-    </Dialog.Header>
-    <form class="grid gap-4" onsubmit={create}>
-      <div class="grid gap-2">
-        <Label for="app-name">Name</Label>
-        <Input id="app-name" required maxlength={64} bind:value={name} placeholder="for example: sayan" />
-        <p class="text-xs text-muted-foreground">
-          Sites send this as the app name. Letters, digits, dots, dashes and underscores.
-        </p>
-      </div>
-
-      <div class="grid gap-2">
-        <Label for="app-key">Firebase service-account key <span class="font-normal text-muted-foreground">(optional now, needed to send)</span></Label>
-        <Input id="app-key" type="file" accept="application/json,.json" onchange={readFile} />
-        <Textarea class="min-h-28 font-mono text-xs" bind:value={serviceAccount} placeholder="…or paste the JSON here" spellcheck={false} />
-        <p class="text-xs text-muted-foreground">
-          Firebase console → Project settings → Service accounts → Generate new private key. It is stored encrypted.
-        </p>
-      </div>
-
-      {#if formError}
-        <Alert.Root variant="destructive" role="alert"><Alert.Description>{formError}</Alert.Description></Alert.Root>
-      {/if}
-      <Dialog.Footer>
-        <Button type="button" variant="outline" onclick={() => (creating = false)}>Cancel</Button>
-        <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create app'}</Button>
-      </Dialog.Footer>
-    </form>
-  </Dialog.Content>
-</Dialog.Root>
+<NewAppDialog bind:open={creating} />

@@ -1,6 +1,6 @@
 # Naming Conventions
 
-How we name things in LetsPush. It has two parts: the **Go rules** we follow as they are, and a **small
+How we name things in Let's Push. It has two parts: the **Go rules** we follow as they are, and a **small
 set of project rules** layered on top. The rules are written as patterns, not as a list of today's
 types, so they stay valid when files move. When in doubt, open a neighbouring file and copy its shape.
 

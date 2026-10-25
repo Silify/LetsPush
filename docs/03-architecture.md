@@ -1,6 +1,6 @@
 # Architecture
 
-How LetsPush is built and why. Read this before changing the structure; for where a piece of code goes,
+How Let's Push is built and why. Read this before changing the structure; for where a piece of code goes,
 see [Project structure](04-project-structure.md).
 
 ## 1. What drives the design

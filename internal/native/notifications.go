@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	// maxPayload is Firebase's limit on a message, with a little room for what LetsPush adds.
+	// maxPayload is Firebase's limit on a message, with a little room for what Let's Push adds.
 	maxPayload = 4000
 	maxImage   = 2048
 	maxSound   = 100

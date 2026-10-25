@@ -1,4 +1,4 @@
-// Package store keeps LetsPush's data in SQLite.
+// Package store keeps Let's Push's data in SQLite.
 package store
 
 import (

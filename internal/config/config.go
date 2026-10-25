@@ -1,4 +1,4 @@
-// Package config reads LetsPush's settings from the environment.
+// Package config reads Let's Push's settings from the environment.
 package config
 
 import (

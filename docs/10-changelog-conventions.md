@@ -1,6 +1,6 @@
 # Changelog Conventions
 
-How LetsPush records what changed between releases. The format follows
+How Let's Push records what changed between releases. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers come from the
 [versioning conventions](09-versioning-conventions.md), commits from the
 [Git conventions](07-git-conventions.md).
@@ -14,8 +14,8 @@ pull requests or release notes.
 `CHANGELOG.md` in the repository root. Newest release first, with an `[Unreleased]` section on top.
 
 **Before the first release, no changelog is needed.** Git history and pull requests are enough while
-LetsPush is in development. Create `CHANGELOG.md` when the first version is released, with a single
-entry (`## [0.1.0] - YYYY-MM-DD`: `Initial release` and a short list of what LetsPush can do), then follow
+Let's Push is in development. Create `CHANGELOG.md` when the first version is released, with a single
+entry (`## [0.1.0] - YYYY-MM-DD`: `Initial release` and a short list of what Let's Push can do), then follow
 this document from then on.
 
 ## 2. Structure
