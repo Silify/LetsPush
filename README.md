@@ -1,6 +1,6 @@
-<p align="center"><img src="assets/logo.svg" alt="LetsPush" width="192" height="192"></p>
+<p align="center"><img src="assets/logo.svg" alt="Let's Push" width="192" height="192"></p>
 
-# LetsPush
+# Let's Push
 
 A small push notification gateway. Your sites and apps send it notifications over a simple HTTP API, and
 it delivers them to Android, iOS and web devices through Firebase Cloud Messaging.
@@ -34,7 +34,7 @@ Everything else is in [`docs/`](docs/01-overview.md): [getting started](docs/02-
 
 ## Credits
 
-LetsPush is a separate program with its own design and storage. It follows the HTTP API of AirNotifier
+Let's Push is a separate program with its own design and storage. It follows the HTTP API of AirNotifier
 (by Dongsheng Cai and contributors, BSD licensed) and works with Moodle's `message_airnotifier` plugin. It is
 not affiliated with or endorsed by either project; the names belong to their owners.
 

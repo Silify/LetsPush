@@ -40,7 +40,7 @@
     <div class="grid justify-items-center gap-3 text-center">
       <div class="scale-150"><Logo /></div>
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">LetsPush</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">Let's Push</h1>
         <p class="text-sm text-muted-foreground">Sign in to manage your push gateway.</p>
       </div>
     </div>

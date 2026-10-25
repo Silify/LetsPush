@@ -1,9 +1,9 @@
 # Getting Started
 
-How to set up, run, test and connect LetsPush. For running a server in production, see
+How to set up, run, test and connect Let's Push. For running a server in production, see
 [Operations](06-operations.md).
 
-LetsPush needs a Firebase project (the free plan is enough) with a service-account key, and a site to
+Let's Push needs a Firebase project (the free plan is enough) with a service-account key, and a site to
 send from. Moodle is the one this project is built for.
 
 ## Prerequisites
@@ -41,7 +41,7 @@ The container listens on `127.0.0.1:8080` only. Put a reverse proxy with HTTPS i
 real use ([Operations](06-operations.md#1-deploying)).
 
 `docker-compose.override.yml` is git-ignored. It is for local needs, such as joining the network of a
-local Moodle so that Moodle can reach LetsPush as `http://letspush:8080`.
+local Moodle so that Moodle can reach Let's Push as `http://letspush:8080`.
 
 ## Run without Docker
 
@@ -114,14 +114,14 @@ In Moodle, *Site administration → Messaging → Mobile*, set:
 |-------------------|--------------------------------------------------------------------|
 | Server URL        | your server's address, for example `https://push.example.com`     |
 | Port              | `443` (or your port)                                               |
-| App name          | the app's name in LetsPush                                         |
+| App name          | the app's name in Let's Push                                         |
 | Access key        | a key from the app's page                                          |
 | Mobile app name   | the mobile app's package id                                        |
 
 Then enable the mobile notifications output under *Plugins → Message outputs*. Moodle's own health
 check on that page flags a wrong address or a wrong key.
 
-Moodle blocks requests to private addresses and to ports other than 80 and 443 by default. If LetsPush
+Moodle blocks requests to private addresses and to ports other than 80 and 443 by default. If Let's Push
 is on a private network, allow its host and port under *Site administration → General → Security →
 HTTP security*.
 
@@ -150,7 +150,7 @@ curl $H -X POST localhost:8080/api/v2/push/ -H 'Content-Type: application/json' 
   -d '{"token":"<fcm-token>","alert":{"title":"Hi","body":"test"}}'
 ```
 
-The same with LetsPush's own API, which also takes an image and data (see [Native API](11-native-api.md)):
+The same with Let's Push's own API, which also takes an image and data (see [Native API](11-native-api.md)):
 
 ```bash
 curl -X POST localhost:8080/v1/notifications -H "Authorization: Bearer <key>" \
@@ -190,7 +190,7 @@ Regenerating a component overwrites local edits to it.
 | Activity log: `firebase send failed with status 403: …`        | Read Google's reason after the status. Usually the FCM API is disabled for the project, the service account lacks a messaging role, or the token belongs to another project |
 | Activity log: `sign-in failed with status 400: invalid_grant …` | The service-account key is wrong or revoked; upload a new one              |
 | Moodle: *Invalid access key*                                   | The key is revoked, belongs to another app, or was mistyped                 |
-| Moodle: the push is `404 Unregistered token`                   | The device is gone from Firebase; LetsPush removed it and Moodle forgets it |
+| Moodle: the push is `404 Unregistered token`                   | The device is gone from Firebase; Let's Push removed it and Moodle forgets it |
 | Moodle cannot reach the server                                 | Moodle's HTTP security blocks the host or port; see *Connect Moodle*        |
 
 More in [Operations](06-operations.md#6-troubleshooting).

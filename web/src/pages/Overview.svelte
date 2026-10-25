@@ -48,7 +48,7 @@
 {#if apps.list && apps.list.length === 0}
   <Card.Root class="mb-6">
     <Card.Header>
-      <Card.Title class="flex items-center gap-2 text-base"><Rocket class="size-4 text-primary" />Welcome to LetsPush</Card.Title>
+      <Card.Title class="flex items-center gap-2 text-base"><Rocket class="size-4 text-primary" />Welcome to Let's Push</Card.Title>
       <Card.Description>Three steps and your first notification is on its way.</Card.Description>
     </Card.Header>
     <Card.Content class="grid gap-4">

@@ -43,7 +43,7 @@
   <Card.Root>
     <Card.Header>
       <Card.Title>Firebase key</Card.Title>
-      <Card.Description>LetsPush signs in to Firebase with this key to deliver notifications. It is stored encrypted and never shown again.</Card.Description>
+      <Card.Description>Let's Push signs in to Firebase with this key to deliver notifications. It is stored encrypted and never shown again.</Card.Description>
       {#if app.hasCredentials && !replacing}
         <Card.Action><Button variant="outline" size="sm" onclick={() => (replacing = true)}>Replace</Button></Card.Action>
       {/if}

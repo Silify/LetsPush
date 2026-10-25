@@ -1,6 +1,6 @@
 # Versioning Conventions
 
-LetsPush follows [Semantic Versioning 2.0.0](https://semver.org/). This document says what a version
+Let's Push follows [Semantic Versioning 2.0.0](https://semver.org/). This document says what a version
 number promises for this project and where the number comes from.
 
 ## 1. Version Format
@@ -13,12 +13,12 @@ MAJOR.MINOR.PATCH
 - **MINOR**: new backward-compatible functionality. `1.4.2 → 1.5.0`
 - **PATCH**: backward-compatible fixes. `1.4.2 → 1.4.3`
 
-Components increase numerically, without leading zeroes. LetsPush has no separate build number: one
+Components increase numerically, without leading zeroes. Let's Push has no separate build number: one
 version names one source tree, and a Docker image or binary built from it carries that version.
 
 ## 2. What the version promises
 
-LetsPush is run by people who cannot always update the things around it, so the promises are about
+Let's Push is run by people who cannot always update the things around it, so the promises are about
 what those things see. These are its **public contract**:
 
 1. **The compatible API** ([Compatible API](05-compatible-api.md)): routes, headers, request shapes, status

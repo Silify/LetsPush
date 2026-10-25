@@ -64,7 +64,7 @@
         <Page {email} onSignedOut={signedOut} />
       {:catch}
         <div class="flex items-center gap-3 text-sm" role="alert">
-          <span class="text-destructive">This page could not be loaded. If LetsPush was just updated, reload.</span>
+          <span class="text-destructive">This page could not be loaded. If Let's Push was just updated, reload.</span>
           <Button variant="outline" size="sm" onclick={() => location.reload()}>Reload</Button>
         </div>
       {/await}

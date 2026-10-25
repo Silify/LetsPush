@@ -1,4 +1,4 @@
-// Package gateway is the heart of LetsPush: it registers devices and delivers notifications to them.
+// Package gateway is the heart of Let's Push: it registers devices and delivers notifications to them.
 // It knows nothing about HTTP or about any push service; the APIs in front of it and the providers
 // behind it are plugged in from outside.
 package gateway

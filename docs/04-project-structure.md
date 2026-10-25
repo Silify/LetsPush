@@ -1,6 +1,6 @@
 # Project Structure
 
-Where code lives in LetsPush, which packages may import which, and how to decide where something new
+Where code lives in Let's Push, which packages may import which, and how to decide where something new
 goes. The design behind it is in [Architecture](03-architecture.md).
 
 ## 1. Mindset
@@ -12,7 +12,7 @@ goes. The design behind it is in [Architecture](03-architecture.md).
 - **Add by adding.** A new API, push service or database is a new package plus one line in the wiring.
 - **No premature layers.** Do not add a folder, interface or type for a second implementation that does
   not exist yet. Add it when the second one arrives.
-- **Everything is `internal/`.** LetsPush is a program, not a library. Nothing outside the module may
+- **Everything is `internal/`.** Let's Push is a program, not a library. Nothing outside the module may
   import its packages.
 
 ## 2. The big picture
@@ -22,7 +22,7 @@ cmd/letspush/        the program: reads settings, wires the pieces, runs the ser
 internal/
   server/            composition: routes, middleware, startup helpers
   compat/            adapter: the AirNotifier / Moodle-compatible API
-  native/            adapter: LetsPush's own API, /v1
+  native/            adapter: Let's Push's own API, /v1
   admin/             adapter: the JSON API behind the web interface
   webui/             serves the built web interface (embedded)
   gateway/           the core: devices, permissions, delivery
@@ -87,7 +87,7 @@ decisions only about the **wire format**; rules belong in the gateway. Tests inc
 
 ### `internal/native/`
 
-LetsPush's own API under `/v1`: `handler.go` (routes, Bearer authentication, the one error shape),
+Let's Push's own API under `/v1`: `handler.go` (routes, Bearer authentication, the one error shape),
 `devices.go`, and `notifications.go` (validating a request and turning it into a `gateway.Notification`).
 Its rules about what a request may contain live here, as they are about the wire format; who may send and
 what happens to a delivery live in the gateway. See [Native API](11-native-api.md).

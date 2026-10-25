@@ -1,6 +1,6 @@
 # Native API
 
-LetsPush's own API, under `/v1`. Use it for anything new: a Moodle plugin of your own, another website, a
+Let's Push's own API, under `/v1`. Use it for anything new: a Moodle plugin of your own, another website, a
 script. It sends a title, a body, an image and any data you like, and tells you how the delivery ended.
 The AirNotifier-compatible API for Moodle's stock plugin is separate; see
 [Compatible API](05-compatible-api.md). The code is in `internal/native`.
@@ -110,7 +110,7 @@ The answer is `202` with `{"id": "ntf_…", "status": "sent"}` or `"pending"`:
 - **`pending`**: Firebase had not answered after about 1.5 seconds. The delivery carries on, with
   retries, and `GET /v1/notifications/{id}` tells you how it ends.
 
-A device the push service no longer knows is a `404` with `device_unregistered`, and LetsPush removes it.
+A device the push service no longer knows is a `404` with `device_unregistered`, and Let's Push removes it.
 Treat that as "forget this token".
 
 ### Ask how a notification ended
@@ -154,9 +154,9 @@ Firebase's own explanation never appears in an answer; it goes to the activity l
 
 ## Using it from a Moodle plugin
 
-A plugin of your own can send straight to LetsPush instead of going through Moodle's messaging. You need:
+A plugin of your own can send straight to Let's Push instead of going through Moodle's messaging. You need:
 
-1. **A LetsPush app and an access key** for your mobile app's Firebase project.
+1. **A Let's Push app and an access key** for your mobile app's Firebase project.
 2. **The device tokens.** Moodle's mobile app registers them in Moodle's `user_devices` table, where
    `pushid` is the token and `platform` the device type, filtered by the app's ID. Read them from there.
 3. **A call to `/v1/notifications`** for each device, for example with PHP's cURL:
@@ -191,7 +191,7 @@ function myplugin_push(string $token, string $platform, string $title, string $b
 }
 ```
 
-This is a sketch, not part of LetsPush; adapt it to the plugin's own settings and error handling. Send from
+This is a sketch, not part of Let's Push; adapt it to the plugin's own settings and error handling. Send from
 a task (cron or ad hoc), not while a page is loading: a delivery can take a second or more.
 
 If you only need Moodle's usual notification (the site name as title, the message as body), you do not need
@@ -200,7 +200,7 @@ this: send a normal Moodle message and the stock `message_airnotifier` plugin fo
 
 ## Compatibility promise
 
-`/v1` is part of LetsPush's public contract ([Versioning conventions](09-versioning-conventions.md#2-what-the-version-promises)).
+`/v1` is part of Let's Push's public contract ([Versioning conventions](09-versioning-conventions.md#2-what-the-version-promises)).
 Adding an optional field, an endpoint or an error code is not a breaking change, so write your client to
 ignore fields it does not know and to treat an unknown `code` like a general failure. Removing or changing
 the meaning of something above is breaking and means `/v2`.

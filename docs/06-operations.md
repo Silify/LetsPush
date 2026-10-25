@@ -1,6 +1,6 @@
 # Operations
 
-Running a LetsPush server: deploying, backing up, upgrading, reading the logs and fixing what goes
+Running a Let's Push server: deploying, backing up, upgrading, reading the logs and fixing what goes
 wrong. To set it up the first time, see [Getting started](02-getting-started.md).
 
 ## 1. Deploying
@@ -19,9 +19,9 @@ push.example.com {
 ```
 
 The proxy must pass `X-Forwarded-Proto` (Caddy, nginx's usual setup and Traefik do), because the
-admin cookie is marked `Secure` only when LetsPush is told the request came over HTTPS.
+admin cookie is marked `Secure` only when Let's Push is told the request came over HTTPS.
 
-**Behind a proxy**, the address LetsPush sees is the proxy's. The sign-in throttle (five wrong passwords
+**Behind a proxy**, the address Let's Push sees is the proxy's. The sign-in throttle (five wrong passwords
 per address and email in 15 minutes) therefore works per email only. Choose a strong admin password.
 
 **One instance.** Storage is one SQLite file; do not run two servers on the same file, and do not put
@@ -45,7 +45,7 @@ deliberately, change it, then upload each app's Firebase key again.
 
 ## 3. Backups
 
-Everything LetsPush knows is in `LETSPUSH_DB` (in Docker, the `letspush-data` volume). The database runs
+Everything Let's Push knows is in `LETSPUSH_DB` (in Docker, the `letspush-data` volume). The database runs
 in WAL mode, so copying only the `.db` file of a running server can give an inconsistent copy.
 
 - **Safest:** stop the container, copy the whole data folder, start it again.
@@ -94,7 +94,7 @@ Start with the app's activity log, then the server's log.
 | `firebase send failed with status 403: PERMISSION_DENIED …`       | Google's reason follows. Enable the Firebase Cloud Messaging API (V1) for the project, and give the service account a messaging role |
 | `…SENDER_ID_MISMATCH`                                             | The device token comes from a different Firebase project than the key         |
 | `firebase send failed with status 400 … INVALID_ARGUMENT`         | The token is malformed, or the payload is rejected; read the reason after the status |
-| `firebase send failed with status 429` or `5xx`, repeatedly       | Google is limiting or failing. LetsPush already retried three times           |
+| `firebase send failed with status 429` or `5xx`, repeatedly       | Google is limiting or failing. Let's Push already retried three times           |
 | `firebase sign-in failed … invalid_grant`                         | The service-account key is wrong or was deleted. Upload a new one             |
 | `the app's key could not be opened`                               | `LETSPUSH_SECRET` is not the one the key was stored with                       |
 | Moodle shows pushes arriving late or not at all, no errors here   | Check Moodle's HTTP security settings and that it can reach the server        |
@@ -104,7 +104,7 @@ Start with the app's activity log, then the server's log.
 | Locked out after wrong passwords                                   | Wait 15 minutes                                                                |
 | Lost the admin password                                            | Change it under *Account* while signed in. If nobody can sign in: stop the server, delete the row in the `admins` table of the database file (with the `sqlite3` tool on the host), and start it with `LETSPUSH_ADMIN_EMAIL` and `LETSPUSH_ADMIN_PASSWORD` set. An admin is created only when there is none |
 
-A `202` from LetsPush means "taken", not "delivered": when Firebase is slow it answers before the result
+A `202` from Let's Push means "taken", not "delivered": when Firebase is slow it answers before the result
 is known. The activity log always gets the outcome.
 
 ---

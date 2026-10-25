@@ -31,7 +31,7 @@
 </script>
 
 {#snippet brand()}
-  <a class="flex items-center gap-2.5 px-1 font-semibold tracking-tight" href="#/"><Logo /> LetsPush</a>
+  <a class="flex items-center gap-2.5 px-1 font-semibold tracking-tight" href="#/"><Logo /> Let's Push</a>
 {/snippet}
 
 <div class="flex min-h-screen">
