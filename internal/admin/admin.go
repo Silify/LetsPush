@@ -29,8 +29,13 @@ type Store interface {
 	ListKeys(appID int64) ([]store.AccessKey, error)
 	RevokeKey(appID, keyID int64) error
 
-	RecentLogs(appID int64, limit int) ([]store.LogEntry, error)
+	ListLogs(store.LogFilter) ([]store.LogEntry, error)
+	CountLogs(appID int64, action, infoPrefix string, since time.Time) (int, error)
 	AddLog(appID int64, action, info string) error
+
+	Totals() (store.Totals, error)
+	ListDevices(appID, beforeID int64, limit int) ([]store.DeviceRow, error)
+	DeleteDevice(appID, id int64) error
 }
 
 // Sealer encrypts the Firebase keys before they are stored.
@@ -78,6 +83,11 @@ func New(s Store, sealer Sealer, serverSecret string, now func() time.Time) (htt
 	mux.Handle("PUT /admin/api/apps/{id}/credentials", h.protect(h.setCredentials))
 	mux.Handle("PUT /admin/api/apps/{id}/settings", h.protect(h.setSettings))
 	mux.Handle("GET /admin/api/apps/{id}/logs", h.protect(h.logs))
+	mux.Handle("GET /admin/api/apps/{id}/devices", h.protect(h.devices))
+	mux.Handle("DELETE /admin/api/apps/{id}/devices/{deviceId}", h.protect(h.removeDevice))
+
+	mux.Handle("GET /admin/api/overview", h.protect(h.overview))
+	mux.Handle("GET /admin/api/logs", h.protect(h.logs))
 
 	mux.Handle("POST /admin/api/apps/{id}/keys", h.protect(h.createKey))
 	mux.Handle("DELETE /admin/api/apps/{id}/keys/{keyId}", h.protect(h.revokeKey))

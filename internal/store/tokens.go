@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"time"
 )
 
 // Token is one device, registered by one access key.
@@ -38,6 +39,49 @@ func (s *Store) UpsertToken(t Token) (created bool, err error) {
 		return false, wrap(err)
 	}
 	return created, tx.Commit()
+}
+
+// DeviceRow is a device with the access key that registered it, for the admin's list.
+type DeviceRow struct {
+	ID             int64
+	Token          string
+	Platform       string
+	Channel        string
+	KeyPrefix      string
+	KeyDescription string
+	KeyRevoked     bool
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// ListDevices returns an app's devices, newest first. [beforeID] pages back from a device id (0 for the
+// first page).
+func (s *Store) ListDevices(appID, beforeID int64, limit int) ([]DeviceRow, error) {
+	rows, err := s.db.Query(`SELECT t.id, t.token, t.device, t.channel, k.prefix, k.description, k.revoked_at IS NOT NULL,
+			t.created_at, t.updated_at
+		FROM tokens t JOIN access_keys k ON k.id = t.key_id
+		WHERE t.app_id = ? AND (? = 0 OR t.id < ?)
+		ORDER BY t.id DESC LIMIT ?`, appID, beforeID, beforeID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	devices := []DeviceRow{}
+	for rows.Next() {
+		var d DeviceRow
+		var created, updated int64
+		if err := rows.Scan(&d.ID, &d.Token, &d.Platform, &d.Channel, &d.KeyPrefix, &d.KeyDescription, &d.KeyRevoked, &created, &updated); err != nil {
+			return nil, err
+		}
+		d.CreatedAt, d.UpdatedAt = fromUnix(created), fromUnix(updated)
+		devices = append(devices, d)
+	}
+	return devices, rows.Err()
+}
+
+// DeleteDevice removes one device of an app.
+func (s *Store) DeleteDevice(appID, id int64) error {
+	return s.exec1(`DELETE FROM tokens WHERE app_id = ? AND id = ?`, appID, id)
 }
 
 // FindToken returns a device registered by this key.
