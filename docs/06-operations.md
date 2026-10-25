@@ -78,7 +78,8 @@ lines with `LETSPUSH_LOG_FORMAT=json`. Each request has a line with `method`, `p
 
 **The activity log** is per app, in the web interface: devices added and removed, pushes sent, access
 keys created and revoked, and failures with the reason Firebase gave. It holds no message text and no
-whole device tokens. It is purged after `LETSPUSH_LOG_RETENTION_DAYS` (default 30).
+whole device tokens. It is purged after `LETSPUSH_LOG_RETENTION_DAYS` (default 30), and so are the records of `/v1`
+deliveries that senders can look up.
 
 **Request IDs.** Every answer carries `X-Request-Id`. A failed delivery in the activity log ends with
 `(request <id>)`; search the server's log for the same ID to see the request. A site can send its own

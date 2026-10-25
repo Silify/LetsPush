@@ -412,3 +412,60 @@ func TestAMessageWithoutTextIsDataOnly(t *testing.T) {
 		t.Fatal("the data was dropped")
 	}
 }
+
+func sentMessage(g *google) map[string]any {
+	var sent map[string]map[string]any
+	json.Unmarshal(g.lastSend.Load().([]byte), &sent)
+	return sent["message"]
+}
+
+func TestTheDefaultsAreHighPriorityAndNoExtras(t *testing.T) {
+	g := newGoogle(t)
+	g.client(nil).Send(context.Background(), creds(t, newKey(t)), message)
+	m := sentMessage(g)
+
+	if m["android"].(map[string]any)["priority"] != "high" {
+		t.Fatalf("unexpected android part %v", m["android"])
+	}
+	if m["apns"].(map[string]any)["headers"].(map[string]any)["apns-priority"] != "10" {
+		t.Fatalf("unexpected apns part %v", m["apns"])
+	}
+	for _, absent := range []string{"webpush"} {
+		if _, has := m[absent]; has {
+			t.Errorf("%s was sent although nothing asked for it", absent)
+		}
+	}
+	if _, has := m["notification"].(map[string]any)["image"]; has {
+		t.Error("an image was sent although there was none")
+	}
+}
+
+func TestDeliveryOptionsReachEveryPlatform(t *testing.T) {
+	g := newGoogle(t)
+	now := time.Unix(1_700_000_000, 0)
+	msg := Message{Token: "device", Title: "T", Body: "B", Image: "https://example.com/a.png",
+		Priority: "normal", TTL: time.Hour, Sound: "ding"}
+	if err := g.client(func() time.Time { return now }).Send(context.Background(), creds(t, newKey(t)), msg); err != nil {
+		t.Fatal(err)
+	}
+	m := sentMessage(g)
+
+	if n := m["notification"].(map[string]any); n["image"] != "https://example.com/a.png" || n["title"] != "T" {
+		t.Errorf("unexpected notification %v", n)
+	}
+	android := m["android"].(map[string]any)
+	if android["priority"] != "normal" || android["ttl"] != "3600s" ||
+		android["notification"].(map[string]any)["sound"] != "ding" {
+		t.Errorf("unexpected android part %v", android)
+	}
+	apns := m["apns"].(map[string]any)
+	headers := apns["headers"].(map[string]any)
+	if headers["apns-priority"] != "5" || headers["apns-expiration"] != "1700003600" ||
+		apns["payload"].(map[string]any)["aps"].(map[string]any)["sound"] != "ding" {
+		t.Errorf("unexpected apns part %v", apns)
+	}
+	web := m["webpush"].(map[string]any)["headers"].(map[string]any)
+	if web["Urgency"] != "normal" || web["TTL"] != "3600" {
+		t.Errorf("unexpected webpush part %v", web)
+	}
+}

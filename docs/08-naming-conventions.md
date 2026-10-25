@@ -99,6 +99,9 @@ Rules that people often get wrong:
 
 - The **compatible API** uses the names AirNotifier and Moodle use (`accesskey`, `device`, `extra`,
   `X-AN-APP-NAME`). Do not "fix" them.
+- The **native API** (`/v1/…`) uses `lowerCamelCase` JSON (`requestId`, `createdAt`), plural resource paths
+  (`/v1/devices`, `/v1/notifications`) and `snake_case` error codes (`device_unregistered`). Notification
+  IDs start with `ntf_`.
 - The **admin API** (`/admin/api/…`) uses `lowerCamelCase` JSON (`projectId`, `hasCredentials`) and plural
   resource paths (`/apps/{id}/keys`).
 - Go structs map to JSON with tags; the Go field keeps the Go name.

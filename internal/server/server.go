@@ -10,6 +10,7 @@ import (
 	"github.com/Silify/letspush/internal/admin"
 	"github.com/Silify/letspush/internal/compat"
 	"github.com/Silify/letspush/internal/gateway"
+	"github.com/Silify/letspush/internal/native"
 	"github.com/Silify/letspush/internal/reqid"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/store"
@@ -41,10 +42,12 @@ func New(o Options) (http.Handler, error) {
 		return nil, err
 	}
 	compatAPI := compat.New(o.Store, o.Gateway)
+	nativeAPI := native.New(o.Store, o.Gateway)
 
 	mux := http.NewServeMux()
 	// Longer, more specific patterns win, so the interface only gets what no API claims.
 	mux.Handle("/admin/api/", adminAPI)
+	mux.Handle("/v1/", nativeAPI)
 	for _, route := range []string{
 		"POST /accesskeys/",
 		"/tokens/",
@@ -136,7 +139,7 @@ func accessLog(next http.Handler) http.Handler {
 // logPath hides device tokens, which are part of the path of some requests.
 func logPath(r *http.Request) string {
 	path := r.URL.Path
-	for _, prefix := range []string{"/tokens/", "/api/v2/tokens/"} {
+	for _, prefix := range []string{"/tokens/", "/api/v2/tokens/", "/v1/devices/"} {
 		if strings.HasPrefix(path, prefix) && len(path) > len(prefix) {
 			return prefix + "…"
 		}

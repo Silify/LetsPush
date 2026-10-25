@@ -32,7 +32,10 @@ func (p *Provider) Send(ctx context.Context, credentials []byte, device gateway.
 	if err != nil {
 		return err
 	}
-	err = p.client.Send(ctx, creds, Message{Token: device.Token, Title: n.Title, Body: n.Body, Data: n.Data})
+	err = p.client.Send(ctx, creds, Message{
+		Token: device.Token, Title: n.Title, Body: n.Body, Image: n.Image, Data: n.Data,
+		Priority: n.Priority, TTL: n.TTL, Sound: n.Sound,
+	})
 	if errors.Is(err, ErrUnregistered) {
 		return gateway.ErrUnregistered
 	}

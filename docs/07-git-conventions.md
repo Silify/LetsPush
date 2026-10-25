@@ -361,6 +361,7 @@ Scopes are optional. Use the **package or area** the change is in, from this lis
 |-----------|-----------------------------------------------------------|
 | `gateway` | The core: devices, permissions, delivery                  |
 | `compat`  | The AirNotifier / Moodle-compatible API                   |
+| `native`  | LetsPush's own `/v1` API                                  |
 | `admin`   | The admin JSON API (sign-in, apps, keys, log)             |
 | `fcm`     | The Firebase provider                                     |
 | `store`   | The database and migrations                               |
@@ -755,7 +756,7 @@ Reference the corresponding issue or task wherever possible.
 ```text
 Branch:         feature/142-native-api
 Commit footer:  Refs: #142
-Pull Request:   feat(api): add the native API (#142)
+Pull Request:   feat(native): add the /v1 API (#142)
 ```
 
 The exact identifier format is the issue number of the project's GitHub repository.

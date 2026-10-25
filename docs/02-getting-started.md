@@ -150,6 +150,13 @@ curl $H -X POST localhost:8080/api/v2/push/ -H 'Content-Type: application/json' 
   -d '{"token":"<fcm-token>","alert":{"title":"Hi","body":"test"}}'
 ```
 
+The same with LetsPush's own API, which also takes an image and data (see [Native API](11-native-api.md)):
+
+```bash
+curl -X POST localhost:8080/v1/notifications -H "Authorization: Bearer <key>" \
+  -d '{"to": {"token": "<fcm-token>", "platform": "android"}, "title": "Hi", "body": "test"}'
+```
+
 A real FCM token is needed for a notification to arrive. A made-up token still exercises sign-in and
 the permission check against Firebase, which is where setup mistakes show up.
 
