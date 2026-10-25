@@ -63,13 +63,21 @@ func pageParams(w http.ResponseWriter, r *http.Request) (limit int, before int64
 	return limit, before, true
 }
 
-// logs is GET /admin/api/logs (every app) and GET /admin/api/apps/{id}/logs: ?limit, ?before and ?action.
+// logs is GET /admin/api/logs (every app, or one with ?app=ID) and GET /admin/api/apps/{id}/logs.
+// Both take ?limit, ?before and ?action.
 func (h *Handler) logs(w http.ResponseWriter, r *http.Request, _ store.Admin) {
 	var appID int64
 	if r.PathValue("id") != "" {
 		id, ok := pathID(r, "id")
 		if !ok {
 			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		appID = id
+	} else if raw := r.URL.Query().Get("app"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id < 1 {
+			writeError(w, http.StatusBadRequest, "app must be an id")
 			return
 		}
 		appID = id

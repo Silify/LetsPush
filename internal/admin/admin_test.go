@@ -384,6 +384,11 @@ func TestLogsOfEveryApp(t *testing.T) {
 	if len(items) != 2 || items[0]["appName"] != "two" || items[1]["appName"] != "one" {
 		t.Fatalf("unexpected log %v", items)
 	}
+	items, _ = logPage(t, e.call("GET", "/admin/api/logs?app="+strconv.FormatInt(one.ID, 10), ""))
+	if len(items) != 1 || items[0]["appName"] != "one" {
+		t.Fatalf("app filter: %v", items)
+	}
+	status(t, e.call("GET", "/admin/api/logs?app=x", ""), 400)
 }
 
 func TestTheOverview(t *testing.T) {
