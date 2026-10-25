@@ -6,7 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +15,8 @@ import (
 
 	"github.com/Silify/letspush/internal/config"
 	"github.com/Silify/letspush/internal/fcm"
+	"github.com/Silify/letspush/internal/gateway"
+	"github.com/Silify/letspush/internal/reqid"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/server"
 	"github.com/Silify/letspush/internal/store"
@@ -31,7 +33,8 @@ func main() {
 		return
 	}
 	if err := run(); err != nil {
-		log.Fatalf("letspush: %v", err)
+		slog.Error("letspush stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -40,6 +43,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	logger := newLogger(cfg.LogFormat)
+	slog.SetDefault(logger)
 
 	db, err := store.Open(cfg.DatabasePath)
 	if err != nil {
@@ -57,13 +63,20 @@ func run() error {
 		return err
 	}
 	if created {
-		log.Printf("created the first admin: %s", cfg.AdminEmail)
+		slog.Info("created the first admin", "email", cfg.AdminEmail)
 	}
 	if n, _ := db.CountAdmins(); n == 0 {
-		log.Printf("there is no admin yet: set LETSPUSH_ADMIN_EMAIL and LETSPUSH_ADMIN_PASSWORD and restart")
+		slog.Warn("there is no admin yet: set LETSPUSH_ADMIN_EMAIL and LETSPUSH_ADMIN_PASSWORD and restart")
 	}
 
-	handler, err := server.New(server.Options{Store: db, Box: box, Sender: fcm.NewClient(), Secret: cfg.Secret})
+	gw := gateway.New(gateway.Config{
+		Store:     db,
+		Opener:    box,
+		Providers: map[string]gateway.Provider{store.ProviderFCM: fcm.NewProvider()},
+	})
+	defer gw.Wait() // let deliveries that are still running finish
+
+	handler, err := server.New(server.Options{Store: db, Box: box, Gateway: gw, Secret: cfg.Secret})
 	if err != nil {
 		return err
 	}
@@ -75,6 +88,7 @@ func run() error {
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           handler,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -83,7 +97,7 @@ func run() error {
 
 	failed := make(chan error, 1)
 	go func() {
-		log.Printf("letspush %s listening on %s", version, cfg.Addr)
+		slog.Info("listening", "version", version, "addr", cfg.Addr)
 		failed <- srv.ListenAndServe()
 	}()
 
@@ -93,10 +107,20 @@ func run() error {
 			return err
 		}
 	case <-ctx.Done():
-		log.Printf("shutting down")
+		slog.Info("shutting down")
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return srv.Shutdown(shutdown)
 	}
 	return nil
+}
+
+// newLogger writes the server's own log to standard error, as plain text or as JSON lines.
+// Records logged with a request's context carry its request_id.
+func newLogger(format string) *slog.Logger {
+	var h slog.Handler = slog.NewTextHandler(os.Stderr, nil)
+	if format == "json" {
+		h = slog.NewJSONHandler(os.Stderr, nil)
+	}
+	return slog.New(reqid.Handler(h))
 }

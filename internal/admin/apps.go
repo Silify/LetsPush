@@ -60,7 +60,11 @@ func (h *Handler) createApp(w http.ResponseWriter, r *http.Request, _ store.Admi
 	if !ok {
 		return
 	}
-	app, err := h.store.CreateApp(name, projectID, sealed)
+	var providers []store.Provider
+	if sealed != "" {
+		providers = append(providers, store.Provider{Kind: store.ProviderFCM, Label: projectID, Credentials: sealed})
+	}
+	app, err := h.store.CreateApp(name, providers...)
 	if err != nil {
 		storeError(w, err)
 		return
@@ -85,10 +89,17 @@ func (h *Handler) showApp(w http.ResponseWriter, r *http.Request, _ store.Admin)
 		storeError(w, err)
 		return
 	}
+	sent, failed, err := h.dayCounts(app.ID)
+	if err != nil {
+		storeError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, struct {
 		appView
 		AccessKeys []keyView `json:"accessKeys"`
-	}{viewOf(app), keyViews(keys)})
+		Sent24h    int       `json:"sent24h"`
+		Errors24h  int       `json:"errors24h"`
+	}{viewOf(app), keyViews(keys), sent, failed})
 }
 
 func (h *Handler) deleteApp(w http.ResponseWriter, r *http.Request, _ store.Admin) {
@@ -120,7 +131,7 @@ func (h *Handler) setCredentials(w http.ResponseWriter, r *http.Request, _ store
 	if !ok {
 		return
 	}
-	if err := h.store.UpdateAppCredentials(id, projectID, sealed); err != nil {
+	if err := h.store.SetProvider(id, store.Provider{Kind: store.ProviderFCM, Label: projectID, Credentials: sealed}); err != nil {
 		storeError(w, err)
 		return
 	}
@@ -175,37 +186,4 @@ func (h *Handler) sealCredentials(w http.ResponseWriter, raw string, optional bo
 		return "", "", false
 	}
 	return creds.ProjectID, sealed, true
-}
-
-type logView struct {
-	At     time.Time `json:"at"`
-	Action string    `json:"action"`
-	Info   string    `json:"info"`
-}
-
-func (h *Handler) logs(w http.ResponseWriter, r *http.Request, _ store.Admin) {
-	id, ok := pathID(r, "id")
-	if !ok {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	limit := 50
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 || n > 200 {
-			writeError(w, http.StatusBadRequest, "limit must be between 1 and 200")
-			return
-		}
-		limit = n
-	}
-	entries, err := h.store.RecentLogs(id, limit)
-	if err != nil {
-		storeError(w, err)
-		return
-	}
-	views := make([]logView, 0, len(entries))
-	for _, e := range entries {
-		views = append(views, logView{e.CreatedAt, e.Action, e.Info})
-	}
-	writeJSON(w, http.StatusOK, views)
 }

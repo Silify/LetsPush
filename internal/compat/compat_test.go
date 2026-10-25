@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Silify/letspush/internal/fcm"
+	"github.com/Silify/letspush/internal/gateway"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/store"
 )
@@ -37,8 +37,9 @@ func TestMain(m *testing.M) {
 }
 
 type sentMessage struct {
-	creds fcm.Credentials
-	msg   fcm.Message
+	creds  []byte
+	device gateway.Device
+	msg    gateway.Notification
 }
 
 type fakeSender struct {
@@ -46,11 +47,11 @@ type fakeSender struct {
 	err  error
 }
 
-func (f *fakeSender) Send(_ context.Context, creds fcm.Credentials, msg fcm.Message) error {
+func (f *fakeSender) Send(_ context.Context, creds []byte, device gateway.Device, msg gateway.Notification) error {
 	if f.err != nil {
 		return f.err
 	}
-	f.sent = append(f.sent, sentMessage{creds, msg})
+	f.sent = append(f.sent, sentMessage{creds, device, msg})
 	return nil
 }
 
@@ -58,6 +59,7 @@ type env struct {
 	t       *testing.T
 	store   *store.Store
 	sender  *fakeSender
+	gateway *gateway.Service
 	handler http.Handler
 	app     store.App
 	key     string // the raw access key
@@ -73,12 +75,17 @@ func newEnv(t *testing.T, permissions int) *env {
 	t.Cleanup(func() { s.Close() })
 	box, _ := secret.NewBox(strings.Repeat("k", 32))
 	sealed, _ := box.Seal([]byte(serviceAccount))
-	app, err := s.CreateApp("sayan", "p", sealed)
+	app, err := s.CreateApp("sayan", store.Provider{Kind: store.ProviderFCM, Label: "p", Credentials: sealed})
 	if err != nil {
 		t.Fatal(err)
 	}
 	e := &env{t: t, store: s, sender: &fakeSender{}, app: app}
-	e.handler = New(s, e.sender, box)
+	e.gateway = gateway.New(gateway.Config{
+		Store:     s,
+		Opener:    box,
+		Providers: map[string]gateway.Provider{store.ProviderFCM: e.sender},
+	})
+	e.handler = New(s, e.gateway)
 	e.key, e.keyRow = e.makeKey(app.ID, permissions)
 	return e
 }
@@ -144,7 +151,7 @@ func expect(t *testing.T, rec *httptest.ResponseRecorder, status int, field, wan
 
 func TestRequestsAreChecked(t *testing.T) {
 	e := newEnv(t, store.PermAll)
-	other, _ := e.store.CreateApp("other", "", "")
+	other, _ := e.store.CreateApp("other")
 	foreignKey, _ := e.makeKey(other.ID, store.PermAll)
 	revoked, row := e.makeKey(e.app.ID, store.PermAll)
 	e.store.RevokeKey(e.app.ID, row.ID)
@@ -200,7 +207,7 @@ func TestTokenPermissionsAndLimits(t *testing.T) {
 	expect(t, e.do(e.authed("DELETE", "/tokens/T", "")), 403, "error", "No permission to delete token")
 
 	e = newEnv(t, store.PermAll)
-	expect(t, e.do(e.authed("POST", "/tokens/"+strings.Repeat("x", maxTokenLength+1), "")), 400, "error", "Invalid token")
+	expect(t, e.do(e.authed("POST", "/tokens/"+strings.Repeat("x", 4096+1), "")), 400, "error", "Invalid token")
 }
 
 func TestTokensThroughTheJSONInterface(t *testing.T) {
@@ -231,7 +238,7 @@ func TestAMoodlePushBecomesANotificationWithAllItsDataAsStrings(t *testing.T) {
 		t.Fatalf("expected one message, got %d", len(e.sender.sent))
 	}
 	got := e.sender.sent[0]
-	if got.creds.ProjectID != "p" || got.msg.Token != "DEVICE-1" ||
+	if string(got.creds) != serviceAccount || got.device.Token != "DEVICE-1" ||
 		got.msg.Title != "Springfield School" || got.msg.Body != "Your essay was graded" {
 		t.Fatalf("unexpected message %+v", got)
 	}
@@ -314,7 +321,7 @@ func TestFirebaseOutcomes(t *testing.T) {
 	t.Run("a dead device is removed and reported as Moodle expects", func(t *testing.T) {
 		e := newEnv(t, store.PermAll)
 		e.do(e.authed("POST", "/tokens/DEAD", ""))
-		e.sender.err = fcm.ErrUnregistered
+		e.sender.err = gateway.ErrUnregistered
 		expect(t, e.do(e.authed("POST", "/api/v2/push/", `{"token":"DEAD"}`)), 404, "error", "Unregistered token")
 		if _, err := e.store.FindToken(e.keyRow.ID, "DEAD"); !errors.Is(err, store.ErrNotFound) {
 			t.Fatal("the dead token was kept")
@@ -323,7 +330,7 @@ func TestFirebaseOutcomes(t *testing.T) {
 	t.Run("another failure is a bad gateway and the token stays", func(t *testing.T) {
 		e := newEnv(t, store.PermAll)
 		e.do(e.authed("POST", "/tokens/OK", ""))
-		e.sender.err = &fcm.Error{Status: 503, Stage: "send"}
+		e.sender.err = errors.New("firebase send failed with status 503")
 		expect(t, e.do(e.authed("POST", "/api/v2/push/", `{"token":"OK"}`)), 502, "error", "error response from fcm")
 		if _, err := e.store.FindToken(e.keyRow.ID, "OK"); err != nil {
 			t.Fatal("the token was removed on a temporary failure")
@@ -331,7 +338,7 @@ func TestFirebaseOutcomes(t *testing.T) {
 	})
 	t.Run("an app without a Firebase key is unavailable", func(t *testing.T) {
 		e := newEnv(t, store.PermAll)
-		bare, _ := e.store.CreateApp("bare", "", "")
+		bare, _ := e.store.CreateApp("bare")
 		key, _ := e.makeKey(bare.ID, store.PermAll)
 		rec := e.do(request{method: "POST", path: "/api/v2/push/", body: `{"token":"D"}`, app: "bare", key: key})
 		expect(t, rec, 503, "", "")
@@ -340,7 +347,7 @@ func TestFirebaseOutcomes(t *testing.T) {
 		e := newEnv(t, store.PermAll)
 		other, _ := secret.NewBox(strings.Repeat("z", 32))
 		sealed, _ := other.Seal([]byte(serviceAccount))
-		e.store.UpdateAppCredentials(e.app.ID, "p", sealed)
+		e.store.SetProvider(e.app.ID, store.Provider{Kind: store.ProviderFCM, Label: "p", Credentials: sealed})
 		expect(t, e.do(e.authed("POST", "/api/v2/push/", `{"token":"D"}`)), 503, "", "")
 	})
 }

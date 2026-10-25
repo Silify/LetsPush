@@ -1,4 +1,4 @@
-// Package store keeps LetsPush's data in SQLite.
+// Package store keeps Let's Push's data in SQLite.
 package store
 
 import (
@@ -133,6 +133,8 @@ func wrap(err error) error {
 		return ErrNotFound
 	case strings.Contains(err.Error(), "UNIQUE constraint failed"):
 		return ErrConflict
+	case strings.Contains(err.Error(), "FOREIGN KEY constraint failed"):
+		return ErrNotFound
 	}
 	return err
 }

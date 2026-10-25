@@ -10,6 +10,7 @@ services:
         GO_IMAGE: ${GO_IMAGE:-golang:1.25-alpine}
         RUN_IMAGE: ${RUN_IMAGE:-alpine:3.22}
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+        VERSION: ${VERSION:-dev}
     restart: unless-stopped
     environment:
       LETSPUSH_SECRET: ${LETSPUSH_SECRET:?set LETSPUSH_SECRET in .env}

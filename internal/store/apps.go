@@ -1,11 +1,25 @@
 package store
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
-// App is one mobile app (one Firebase project) that notifications are sent to.
+// ProviderFCM is the kind of the Firebase Cloud Messaging provider, which delivers to Android, iOS and the web.
+const ProviderFCM = "fcm"
+
+// Provider is the key an app uses to reach one push service.
+type Provider struct {
+	Kind        string
+	Label       string // shown in lists; for Firebase, the project id
+	Credentials string // sealed
+}
+
+// App is one app that notifications are sent to.
 type App struct {
-	ID               int64
-	Name             string
+	ID   int64
+	Name string
+	// ProjectID and HasCredentials describe the app's Firebase provider, the only one there is for now.
 	ProjectID        string
 	HasCredentials   bool
 	AllowKeyRequests bool
@@ -14,7 +28,10 @@ type App struct {
 	Tokens           int
 }
 
-const appColumns = `a.id, a.name, a.project_id, a.credentials <> '', a.allow_key_requests, a.created_at,
+const appColumns = `a.id, a.name,
+	COALESCE((SELECT p.label FROM app_providers p WHERE p.app_id = a.id AND p.kind = 'fcm'), ''),
+	EXISTS (SELECT 1 FROM app_providers p WHERE p.app_id = a.id AND p.kind = 'fcm'),
+	a.allow_key_requests, a.created_at,
 	(SELECT COUNT(*) FROM access_keys k WHERE k.app_id = a.id AND k.revoked_at IS NULL),
 	(SELECT COUNT(*) FROM tokens t WHERE t.app_id = a.id)`
 
@@ -28,14 +45,28 @@ func scanApp(row rowScanner) (App, error) {
 	return a, nil
 }
 
-// CreateApp adds an app. [credentials] is the already sealed Firebase key, or empty.
-func (s *Store) CreateApp(name, projectID, credentials string) (App, error) {
-	res, err := s.db.Exec(`INSERT INTO apps (name, project_id, credentials, created_at) VALUES (?, ?, ?, ?)`,
-		name, projectID, credentials, s.unix())
+// CreateApp adds an app, with its providers if it has any yet.
+func (s *Store) CreateApp(name string, providers ...Provider) (App, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return App{}, err
+	}
+	defer tx.Rollback()
+
+	now := s.unix()
+	res, err := tx.Exec(`INSERT INTO apps (name, created_at) VALUES (?, ?)`, name, now)
 	if err != nil {
 		return App{}, wrap(err)
 	}
 	id, _ := res.LastInsertId()
+	for _, p := range providers {
+		if err := putProvider(tx, id, p, now); err != nil {
+			return App{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return App{}, err
+	}
 	return s.AppByID(id)
 }
 
@@ -67,16 +98,28 @@ func (s *Store) ListApps() ([]App, error) {
 	return apps, rows.Err()
 }
 
-// AppCredentials returns the sealed Firebase key of an app.
-func (s *Store) AppCredentials(id int64) (string, error) {
-	var sealed string
-	err := s.db.QueryRow(`SELECT credentials FROM apps WHERE id = ?`, id).Scan(&sealed)
-	return sealed, wrap(err)
+// AppProvider returns the app's key for a provider, still sealed.
+func (s *Store) AppProvider(appID int64, kind string) (Provider, error) {
+	p := Provider{Kind: kind}
+	err := s.db.QueryRow(`SELECT label, credentials FROM app_providers WHERE app_id = ? AND kind = ?`, appID, kind).
+		Scan(&p.Label, &p.Credentials)
+	return p, wrap(err)
 }
 
-// UpdateAppCredentials replaces the Firebase key and project of an app.
-func (s *Store) UpdateAppCredentials(id int64, projectID, credentials string) error {
-	return s.exec1(`UPDATE apps SET project_id = ?, credentials = ? WHERE id = ?`, projectID, credentials, id)
+// SetProvider adds an app's key for a provider, or replaces it.
+func (s *Store) SetProvider(appID int64, p Provider) error {
+	return putProvider(s.db, appID, p, s.unix())
+}
+
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func putProvider(db execer, appID int64, p Provider, now int64) error {
+	_, err := db.Exec(`INSERT INTO app_providers (app_id, kind, label, credentials, updated_at) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (app_id, kind) DO UPDATE SET label = excluded.label, credentials = excluded.credentials, updated_at = excluded.updated_at`,
+		appID, p.Kind, p.Label, p.Credentials, now)
+	return wrap(err)
 }
 
 // SetAllowKeyRequests switches whether sites may request their own access key.

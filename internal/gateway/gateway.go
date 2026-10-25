@@ -1,0 +1,384 @@
+// Package gateway is the heart of Let's Push: it registers devices and delivers notifications to them.
+// It knows nothing about HTTP or about any push service; the APIs in front of it and the providers
+// behind it are plugged in from outside.
+package gateway
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/Silify/letspush/internal/reqid"
+	"github.com/Silify/letspush/internal/store"
+)
+
+var (
+	// ErrNoPermission means the access key may not do this.
+	ErrNoPermission = errors.New("no permission")
+	// ErrInvalidToken means the device token is empty or too long.
+	ErrInvalidToken = errors.New("invalid token")
+	// ErrUnknownToken means the key has not registered this device and may not register it now.
+	ErrUnknownToken = errors.New("unknown token and no permission to create")
+	// ErrTokenNotFound means the key has no such device.
+	ErrTokenNotFound = errors.New("token not found")
+	// ErrNoProvider means the app has no working key for the push service this device needs.
+	ErrNoProvider = errors.New("the app has no working key for this device")
+	// ErrUnregistered is what a provider returns when the push service no longer knows the device.
+	ErrUnregistered = errors.New("unregistered token")
+	// ErrDelivery means the push service refused the notification or could not be reached.
+	ErrDelivery = errors.New("delivery failed")
+)
+
+const (
+	maxTokenLength = 4096
+	defaultDevice  = "fcm"
+	defaultChannel = "default"
+
+	defaultWait    = 1500 * time.Millisecond
+	defaultTimeout = 60 * time.Second
+)
+
+// Priorities of a notification.
+const (
+	PriorityNormal = "normal"
+	PriorityHigh   = "high"
+)
+
+// Notification is what the person sees, plus the data the app receives.
+// With no title and no body it is data only, and the app shows it.
+type Notification struct {
+	Title string
+	Body  string
+	// Image is the address of a picture to show with the notification.
+	Image string
+	Data  map[string]string
+
+	// Priority is PriorityNormal or PriorityHigh. Empty means high, which gets a phone's attention at once.
+	Priority string
+	// TTL is how long the push service keeps trying to reach a device that is off. Zero leaves it to the service.
+	TTL time.Duration
+	// Sound is the name of the sound to play. "default" is the device's usual one.
+	Sound string
+}
+
+// Device is where a notification goes.
+type Device struct {
+	Token string
+	// Platform is the device type the site gave: "android", "ios", "web"...
+	Platform string
+}
+
+// Provider delivers a notification through one push service.
+// It returns ErrUnregistered when the service no longer knows the device.
+type Provider interface {
+	Send(ctx context.Context, credentials []byte, device Device, n Notification) error
+}
+
+// Store is the part of the database the gateway uses.
+type Store interface {
+	AppProvider(appID int64, kind string) (store.Provider, error)
+	FindToken(keyID int64, token string) (store.Token, error)
+	UpsertToken(store.Token) (created bool, err error)
+	DeleteToken(keyID int64, token string) error
+	AddLog(appID int64, action, info string) error
+	AddDelivery(store.Delivery) error
+	SetDeliveryStatus(id, status string) error
+}
+
+// Opener opens the sealed provider keys.
+type Opener interface {
+	Open(sealed string) ([]byte, error)
+}
+
+// Config is what a Service is built from.
+type Config struct {
+	Store  Store
+	Opener Opener
+	// Providers are the push services, by kind.
+	Providers map[string]Provider
+	// Wait is how long Send waits for the provider before it answers Pending. Default 1.5 seconds.
+	Wait time.Duration
+	// Timeout is how long a delivery may take in all, retries included. Default 60 seconds.
+	Timeout time.Duration
+}
+
+// Service registers devices and delivers notifications.
+type Service struct {
+	store     Store
+	opener    Opener
+	providers map[string]Provider
+	wait      time.Duration
+	timeout   time.Duration
+	running   sync.WaitGroup
+}
+
+// New returns a Service.
+func New(c Config) *Service {
+	s := &Service{store: c.Store, opener: c.Opener, providers: c.Providers, wait: c.Wait, timeout: c.Timeout}
+	if s.wait <= 0 {
+		s.wait = defaultWait
+	}
+	if s.timeout <= 0 {
+		s.timeout = defaultTimeout
+	}
+	return s
+}
+
+// Wait blocks until every delivery that is still running has finished. Call it when shutting down.
+func (s *Service) Wait() { s.running.Wait() }
+
+// Register adds a device for an access key, or updates it. It reports whether the device was new.
+func (s *Service) Register(app store.App, key store.AccessKey, token, platform, channel string) (created bool, err error) {
+	if !key.Can(store.PermCreateToken) {
+		return false, ErrNoPermission
+	}
+	_, created, err = s.register(app, key, token, platform, channel)
+	return created, err
+}
+
+// Remove deletes a device of an access key.
+func (s *Service) Remove(app store.App, key store.AccessKey, token string) error {
+	if !key.Can(store.PermDeleteToken) {
+		return ErrNoPermission
+	}
+	if err := s.store.DeleteToken(key.ID, token); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrTokenNotFound
+		}
+		return err
+	}
+	_ = s.store.AddLog(app.ID, "token", "removed by key "+key.Prefix)
+	return nil
+}
+
+func (s *Service) register(app store.App, key store.AccessKey, token, platform, channel string) (store.Token, bool, error) {
+	token = strings.TrimSpace(token)
+	if token == "" || len(token) > maxTokenLength {
+		return store.Token{}, false, ErrInvalidToken
+	}
+	t := store.Token{
+		AppID:   app.ID,
+		KeyID:   key.ID,
+		Token:   token,
+		Device:  orDefault(strings.ToLower(strings.TrimSpace(platform)), defaultDevice),
+		Channel: orDefault(strings.TrimSpace(channel), defaultChannel),
+	}
+	created, err := s.store.UpsertToken(t)
+	if err != nil {
+		return store.Token{}, false, err
+	}
+	if created {
+		_ = s.store.AddLog(app.ID, "token", "added by key "+key.Prefix)
+	}
+	return t, created, nil
+}
+
+// Message is one notification for one device.
+type Message struct {
+	Token string
+	// Platform and Channel register the device when this key has not done so yet.
+	Platform string
+	Channel  string
+	Notification
+}
+
+// Status says how far a delivery got.
+type Status string
+
+const (
+	// Sent means the push service accepted the notification.
+	Sent Status = "sent"
+	// Pending means the push service had not answered in time. The delivery carries on in the
+	// background, and its outcome goes to the log.
+	Pending Status = "pending"
+	// Failed and Unregistered are how a tracked delivery can end besides Sent: the push service
+	// refused it, or no longer knows the device.
+	Failed       Status = "failed"
+	Unregistered Status = "unregistered"
+)
+
+// Receipt is what a tracked send hands back: an ID to ask about the delivery later, and how far it got.
+type Receipt struct {
+	ID     string
+	Status Status
+}
+
+// Send delivers a notification to a device. A device the key has not registered yet is registered
+// first, if the key may.
+//
+// Send waits a short while for the push service, so that callers get the real answer (a dead device,
+// a refusal) when it is quick. When it is slow, Send answers Pending and the delivery finishes on its
+// own: a caller that gives up and hangs up does not cancel it.
+func (s *Service) Send(ctx context.Context, app store.App, key store.AccessKey, msg Message) (Status, error) {
+	receipt, err := s.send(ctx, app, key, msg, false)
+	return receipt.Status, err
+}
+
+// SendTracked is Send for callers that want to ask about the delivery afterwards. It records the delivery
+// and returns its ID, also when the send fails quickly. The record holds no message text.
+func (s *Service) SendTracked(ctx context.Context, app store.App, key store.AccessKey, msg Message) (Receipt, error) {
+	return s.send(ctx, app, key, msg, true)
+}
+
+func (s *Service) send(ctx context.Context, app store.App, key store.AccessKey, msg Message, track bool) (Receipt, error) {
+	if !key.Can(store.PermSendNotification) {
+		return Receipt{}, ErrNoPermission
+	}
+	device, err := s.deviceOf(app, key, msg)
+	if err != nil {
+		return Receipt{}, err
+	}
+	provider, credentials, err := s.providerFor(ctx, app, device.Device)
+	if err != nil {
+		return Receipt{}, err
+	}
+
+	var id string
+	if track {
+		id = newDeliveryID()
+		if err := s.store.AddDelivery(store.Delivery{
+			ID: id, AppID: app.ID, KeyID: key.ID, Status: string(Pending), RequestID: reqid.From(ctx),
+		}); err != nil {
+			return Receipt{}, err
+		}
+	}
+
+	done := make(chan error, 1)
+	s.running.Add(1)
+	go func() {
+		defer s.running.Done()
+		sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
+		defer cancel()
+		err := s.deliver(sendCtx, app, key, device, provider, credentials, msg.Notification)
+		s.finish(id, err)
+		done <- err
+	}()
+
+	timer := time.NewTimer(s.wait)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			return Receipt{ID: id}, err
+		}
+		return Receipt{ID: id, Status: Sent}, nil
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return Receipt{ID: id, Status: Pending}, nil
+}
+
+// finish records how a tracked delivery ended. [id] is empty for deliveries that are not tracked.
+func (s *Service) finish(id string, err error) {
+	if id == "" {
+		return
+	}
+	status := Sent
+	switch {
+	case errors.Is(err, ErrUnregistered):
+		status = Unregistered
+	case err != nil:
+		status = Failed
+	}
+	_ = s.store.SetDeliveryStatus(id, string(status))
+}
+
+func newDeliveryID() string {
+	b := make([]byte, 12)
+	_, _ = rand.Read(b)
+	return "ntf_" + hex.EncodeToString(b)
+}
+
+// deviceOf finds the device a message is for, registering it when the key may.
+func (s *Service) deviceOf(app store.App, key store.AccessKey, msg Message) (store.Token, error) {
+	token := strings.TrimSpace(msg.Token)
+	if token == "" || len(token) > maxTokenLength {
+		return store.Token{}, ErrInvalidToken
+	}
+	device, err := s.store.FindToken(key.ID, token)
+	if err == nil {
+		return device, nil
+	}
+	if !errors.Is(err, store.ErrNotFound) {
+		return store.Token{}, err
+	}
+	if !key.Can(store.PermCreateToken) {
+		return store.Token{}, ErrUnknownToken
+	}
+	device, _, err = s.register(app, key, token, msg.Platform, msg.Channel)
+	return device, err
+}
+
+// providerFor picks the push service for a device and opens the app's key for it.
+func (s *Service) providerFor(ctx context.Context, app store.App, device string) (Provider, []byte, error) {
+	kind := kindFor(device)
+	provider := s.providers[kind]
+	if provider == nil {
+		return nil, nil, ErrNoProvider
+	}
+	stored, err := s.store.AppProvider(app.ID, kind)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, nil, ErrNoProvider
+		}
+		return nil, nil, err
+	}
+	credentials, err := s.opener.Open(stored.Credentials)
+	if err != nil {
+		_ = s.store.AddLog(app.ID, "error", withRequestID(ctx, "the app's key could not be opened: "+err.Error()))
+		return nil, nil, ErrNoProvider
+	}
+	return provider, credentials, nil
+}
+
+// kindFor says which push service delivers to a device. Firebase reaches Android, iOS and the web,
+// so every device goes through it for now.
+func kindFor(string) string { return store.ProviderFCM }
+
+// deliver sends one notification and records what came of it.
+func (s *Service) deliver(ctx context.Context, app store.App, key store.AccessKey, device store.Token, provider Provider, credentials []byte, n Notification) error {
+	err := provider.Send(ctx, credentials, Device{Token: device.Token, Platform: device.Device}, n)
+	switch {
+	case err == nil:
+		_ = s.store.AddLog(app.ID, "push", fmt.Sprintf("sent to %s by key %s", shortToken(device.Token), key.Prefix))
+		return nil
+	case errors.Is(err, ErrUnregistered):
+		_ = s.store.DeleteToken(key.ID, device.Token)
+		_ = s.store.AddLog(app.ID, "push", fmt.Sprintf("%s is no longer registered; removed", shortToken(device.Token)))
+		slog.InfoContext(ctx, "device is no longer registered; removed", "app", app.Name, "device", shortToken(device.Token))
+		return ErrUnregistered
+	default:
+		// The request ID in the activity log lets an admin find the server's own log lines for it.
+		_ = s.store.AddLog(app.ID, "error", withRequestID(ctx, fmt.Sprintf("sending to %s failed: %s", shortToken(device.Token), err)))
+		slog.WarnContext(ctx, "delivery failed", "app", app.Name, "device", shortToken(device.Token), "error", err)
+		return fmt.Errorf("%w: %v", ErrDelivery, err)
+	}
+}
+
+func withRequestID(ctx context.Context, text string) string {
+	if id := reqid.From(ctx); id != "" {
+		return text + " (request " + id + ")"
+	}
+	return text
+}
+
+// shortToken is enough of a token to recognise it in the log without keeping the whole device address:
+// the first characters, never more than half of it.
+func shortToken(token string) string {
+	runes := []rune(token)
+	keep := min(8, len(runes)/2)
+	return string(runes[:keep]) + "…"
+}
+
+func orDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}

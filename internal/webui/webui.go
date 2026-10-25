@@ -33,7 +33,7 @@ func handler(files fs.FS) http.Handler {
 		if _, err := fs.Stat(files, "index.html"); err != nil {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("LetsPush is running, but its web interface has not been built into this binary.\n"))
+			_, _ = w.Write([]byte("Let's Push is running, but its web interface has not been built into this binary.\n"))
 			return
 		}
 

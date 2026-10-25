@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Silify/letspush/internal/fcm"
+	"github.com/Silify/letspush/internal/gateway"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/store"
 )
@@ -38,9 +38,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-type recordingSender struct{ messages []fcm.Message }
+type recordingSender struct{ messages []gateway.Notification }
 
-func (r *recordingSender) Send(_ context.Context, _ fcm.Credentials, m fcm.Message) error {
+func (r *recordingSender) Send(_ context.Context, _ []byte, _ gateway.Device, m gateway.Notification) error {
 	r.messages = append(r.messages, m)
 	return nil
 }
@@ -56,7 +56,8 @@ func build(t *testing.T, ui http.Handler) (http.Handler, *store.Store, *recordin
 	t.Cleanup(func() { db.Close() })
 	box, _ := secret.NewBox(serverSecret)
 	sender := &recordingSender{}
-	h, err := New(Options{Store: db, Box: box, Sender: sender, Secret: serverSecret, UI: ui})
+	gw := gateway.New(gateway.Config{Store: db, Opener: box, Providers: map[string]gateway.Provider{store.ProviderFCM: sender}})
+	h, err := New(Options{Store: db, Box: box, Gateway: gw, Secret: serverSecret, UI: ui})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +203,7 @@ func TestTheAccessLogHidesDeviceTokens(t *testing.T) {
 
 func TestPurgeLogsDeletesOldEntriesAndStops(t *testing.T) {
 	_, db, _ := build(t, nil)
-	app, _ := db.CreateApp("sayan", "", "")
+	app, _ := db.CreateApp("sayan")
 	db.AddLog(app.ID, "push", "kept")
 
 	ctx, cancel := context.WithCancel(context.Background())

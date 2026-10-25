@@ -3,49 +3,33 @@
 package compat
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
-	"github.com/Silify/letspush/internal/fcm"
+	"github.com/Silify/letspush/internal/gateway"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/store"
 )
 
-// Store is the part of the database this API uses.
+// Store is the part of the database this API uses itself; devices and sending go through the gateway.
 type Store interface {
 	AppByName(name string) (store.App, error)
-	AppCredentials(appID int64) (string, error)
 	KeyByHash(hash string) (store.AccessKey, error)
 	TouchKey(id int64) error
 	CreateKey(store.NewKey) (store.AccessKey, error)
-	UpsertToken(store.Token) (bool, error)
-	FindToken(keyID int64, token string) (store.Token, error)
-	DeleteToken(keyID int64, token string) error
 	AddLog(appID int64, action, info string) error
-}
-
-// Sender delivers a message to Firebase.
-type Sender interface {
-	Send(ctx context.Context, creds fcm.Credentials, msg fcm.Message) error
-}
-
-// Opener opens the sealed Firebase keys.
-type Opener interface {
-	Open(sealed string) ([]byte, error)
 }
 
 // Handler is the compatible API.
 type Handler struct {
-	store  Store
-	sender Sender
-	opener Opener
+	store   Store
+	gateway *gateway.Service
 }
 
 // New returns the API's routes.
-func New(s Store, sender Sender, opener Opener) http.Handler {
-	h := &Handler{store: s, sender: sender, opener: opener}
+func New(s Store, gw *gateway.Service) http.Handler {
+	h := &Handler{store: s, gateway: gw}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /accesskeys/", h.requestAccessKey)

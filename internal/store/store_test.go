@@ -19,7 +19,7 @@ func open(t *testing.T) *Store {
 
 func newApp(t *testing.T, s *Store, name string) App {
 	t.Helper()
-	app, err := s.CreateApp(name, "project", "sealed")
+	app, err := s.CreateApp(name, Provider{Kind: ProviderFCM, Label: "project", Credentials: "sealed"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,10 +90,10 @@ func TestApps(t *testing.T) {
 	if !app.HasCredentials || app.AllowKeyRequests {
 		t.Fatalf("unexpected app %+v", app)
 	}
-	if _, err := s.CreateApp("sayan", "", ""); !errors.Is(err, ErrConflict) {
+	if _, err := s.CreateApp("sayan"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("duplicate name should conflict, got %v", err)
 	}
-	bare, _ := s.CreateApp("bare", "", "")
+	bare, _ := s.CreateApp("bare")
 	if bare.HasCredentials {
 		t.Fatal("an app without a key should say so")
 	}
@@ -104,11 +104,20 @@ func TestApps(t *testing.T) {
 	if got, _ := s.AppByName("sayan"); !got.AllowKeyRequests {
 		t.Fatal("the switch was not saved")
 	}
-	if err := s.UpdateAppCredentials(app.ID, "other", "resealed"); err != nil {
+	if err := s.SetProvider(app.ID, Provider{Kind: ProviderFCM, Label: "other", Credentials: "resealed"}); err != nil {
 		t.Fatal(err)
 	}
-	if sealed, _ := s.AppCredentials(app.ID); sealed != "resealed" {
-		t.Fatalf("credentials not updated: %q", sealed)
+	if p, _ := s.AppProvider(app.ID, ProviderFCM); p.Credentials != "resealed" || p.Label != "other" {
+		t.Fatalf("provider not updated: %+v", p)
+	}
+	if got, _ := s.AppByID(app.ID); got.ProjectID != "other" {
+		t.Fatalf("project id not updated: %q", got.ProjectID)
+	}
+	if _, err := s.AppProvider(bare.ID, ProviderFCM); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an app without a key should have no provider, got %v", err)
+	}
+	if err := s.SetProvider(9999, Provider{Kind: ProviderFCM, Credentials: "x"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("a missing app should not be found, got %v", err)
 	}
 	if apps, _ := s.ListApps(); len(apps) != 2 {
 		t.Fatalf("expected 2 apps, got %d", len(apps))

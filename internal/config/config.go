@@ -1,4 +1,4 @@
-// Package config reads LetsPush's settings from the environment.
+// Package config reads Let's Push's settings from the environment.
 package config
 
 import (
@@ -21,6 +21,8 @@ type Config struct {
 	AdminPassword string
 	// LogRetentionDays is how long the push log is kept.
 	LogRetentionDays int
+	// LogFormat is how the server writes its own log: "text" or "json".
+	LogFormat string
 }
 
 const minSecretLength = 32
@@ -34,6 +36,7 @@ func Load(getenv func(string) string) (Config, error) {
 		AdminEmail:       strings.TrimSpace(getenv("LETSPUSH_ADMIN_EMAIL")),
 		AdminPassword:    getenv("LETSPUSH_ADMIN_PASSWORD"),
 		LogRetentionDays: 30,
+		LogFormat:        valueOr(strings.ToLower(strings.TrimSpace(getenv("LETSPUSH_LOG_FORMAT"))), "text"),
 	}
 
 	if len(cfg.Secret) < minSecretLength {
@@ -46,6 +49,10 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, errors.New("LETSPUSH_LOG_RETENTION_DAYS must be a whole number of days, 1 or more")
 		}
 		cfg.LogRetentionDays = days
+	}
+
+	if cfg.LogFormat != "text" && cfg.LogFormat != "json" {
+		return Config{}, errors.New(`LETSPUSH_LOG_FORMAT must be "text" or "json"`)
 	}
 
 	if (cfg.AdminEmail == "") != (cfg.AdminPassword == "") {

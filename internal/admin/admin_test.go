@@ -222,7 +222,8 @@ func TestEverythingElseNeedsASession(t *testing.T) {
 		{"GET", "/admin/api/apps"}, {"POST", "/admin/api/apps"}, {"GET", "/admin/api/apps/1"},
 		{"DELETE", "/admin/api/apps/1"}, {"PUT", "/admin/api/apps/1/credentials"}, {"PUT", "/admin/api/apps/1/settings"},
 		{"GET", "/admin/api/apps/1/logs"}, {"POST", "/admin/api/apps/1/keys"}, {"DELETE", "/admin/api/apps/1/keys/1"},
-		{"POST", "/admin/api/password"},
+		{"POST", "/admin/api/password"}, {"GET", "/admin/api/overview"}, {"GET", "/admin/api/logs"},
+		{"GET", "/admin/api/apps/1/devices"}, {"DELETE", "/admin/api/apps/1/devices/1"},
 	} {
 		if rec := e.do(c[0], c[1], "{}", csrf); rec.Code != 401 {
 			t.Errorf("%s %s answered %d without a session", c[0], c[1], rec.Code)
@@ -242,7 +243,7 @@ func TestAppsAndTheirFirebaseKeys(t *testing.T) {
 	if app["projectId"] != "my-project" || app["hasCredentials"] != true {
 		t.Fatalf("unexpected app %v", app)
 	}
-	if sealed, _ := e.store.AppCredentials(int64(app["id"].(float64))); strings.Contains(sealed, "private_key") {
+	if p, _ := e.store.AppProvider(int64(app["id"].(float64)), store.ProviderFCM); p.Credentials == "" || strings.Contains(p.Credentials, "private_key") {
 		t.Fatal("the Firebase key was stored unsealed")
 	}
 	if strings.Contains(rec.Body.String(), "BEGIN PRIVATE KEY") {
@@ -285,7 +286,7 @@ func TestAppsAndTheirFirebaseKeys(t *testing.T) {
 func TestAccessKeys(t *testing.T) {
 	e := newEnv(t)
 	e.login()
-	app, _ := e.store.CreateApp("sayan", "", "")
+	app, _ := e.store.CreateApp("sayan")
 	base := "/admin/api/apps/" + strconv.FormatInt(app.ID, 10)
 
 	rec := e.call("POST", base+"/keys", `{"description":"School A","contact":"admin@a.example"}`)
@@ -321,36 +322,138 @@ func TestAccessKeys(t *testing.T) {
 	}
 }
 
+func logPage(t *testing.T, rec *httptest.ResponseRecorder) ([]map[string]any, *float64) {
+	t.Helper()
+	status(t, rec, 200)
+	var out struct {
+		Items []map[string]any `json:"items"`
+		Next  *float64         `json:"next"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("not a page: %q", rec.Body.String())
+	}
+	return out.Items, out.Next
+}
+
 func TestLogs(t *testing.T) {
 	e := newEnv(t)
 	e.login()
-	app, _ := e.store.CreateApp("sayan", "", "")
+	app, _ := e.store.CreateApp("sayan")
+	other, _ := e.store.CreateApp("other")
 	base := "/admin/api/apps/" + strconv.FormatInt(app.ID, 10) + "/logs"
 	for i := 0; i < 3; i++ {
 		e.store.AddLog(app.ID, "push", "line "+strconv.Itoa(i))
 	}
+	e.store.AddLog(app.ID, "error", "boom")
+	e.store.AddLog(other.ID, "push", "elsewhere")
 
-	var entries []map[string]any
-	json.Unmarshal(e.call("GET", base, "").Body.Bytes(), &entries)
-	if len(entries) != 3 || entries[0]["info"] != "line 2" {
-		t.Fatalf("unexpected log %v", entries)
+	items, next := logPage(t, e.call("GET", base, ""))
+	if len(items) != 4 || items[0]["info"] != "boom" || items[0]["appName"] != "sayan" || next != nil {
+		t.Fatalf("unexpected log %v (next %v)", items, next)
 	}
-	json.Unmarshal(e.call("GET", base+"?limit=1", "").Body.Bytes(), &entries)
-	if len(entries) != 1 {
-		t.Fatal("the limit was ignored")
+	items, _ = logPage(t, e.call("GET", base+"?action=error", ""))
+	if len(items) != 1 || items[0]["info"] != "boom" {
+		t.Fatalf("action filter: %v", items)
 	}
+
+	// Paging: a full page has a next, and "before" continues from it.
+	items, next = logPage(t, e.call("GET", base+"?limit=3", ""))
+	if len(items) != 3 || next == nil {
+		t.Fatalf("expected a full page with a next, got %d and %v", len(items), next)
+	}
+	items, next = logPage(t, e.call("GET", base+"?limit=3&before="+strconv.Itoa(int(*next)), ""))
+	if len(items) != 1 || items[0]["info"] != "line 0" || next != nil {
+		t.Fatalf("second page: %v (next %v)", items, next)
+	}
+
 	status(t, e.call("GET", base+"?limit=0", ""), 400)
 	status(t, e.call("GET", base+"?limit=9999", ""), 400)
+	status(t, e.call("GET", base+"?before=x", ""), 400)
+	status(t, e.call("GET", base+"?action=nope", ""), 400)
 }
 
-func TestChangingThePassword(t *testing.T) {
+func TestLogsOfEveryApp(t *testing.T) {
 	e := newEnv(t)
 	e.login()
-	status(t, e.call("POST", "/admin/api/password", `{"current":"wrong","new":"another-long-password"}`), 403)
-	status(t, e.call("POST", "/admin/api/password", `{"current":"`+adminPassword+`","new":"short"}`), 400)
-	status(t, e.call("POST", "/admin/api/password", `{"current":"`+adminPassword+`","new":"another-long-password"}`), 200)
+	one, _ := e.store.CreateApp("one")
+	two, _ := e.store.CreateApp("two")
+	e.store.AddLog(one.ID, "push", "a")
+	e.store.AddLog(two.ID, "push", "b")
 
-	e.cookie = nil
-	status(t, e.do("POST", "/admin/api/login", `{"email":"`+adminEmail+`","password":"`+adminPassword+`"}`, nil), 401)
-	status(t, e.do("POST", "/admin/api/login", `{"email":"`+adminEmail+`","password":"another-long-password"}`, nil), 200)
+	items, _ := logPage(t, e.call("GET", "/admin/api/logs", ""))
+	if len(items) != 2 || items[0]["appName"] != "two" || items[1]["appName"] != "one" {
+		t.Fatalf("unexpected log %v", items)
+	}
+	items, _ = logPage(t, e.call("GET", "/admin/api/logs?app="+strconv.FormatInt(one.ID, 10), ""))
+	if len(items) != 1 || items[0]["appName"] != "one" {
+		t.Fatalf("app filter: %v", items)
+	}
+	status(t, e.call("GET", "/admin/api/logs?app=x", ""), 400)
+}
+
+func TestTheOverview(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	keyed, _ := e.store.CreateApp("keyed", store.Provider{Kind: store.ProviderFCM, Label: "p", Credentials: "x"})
+	e.store.CreateApp("bare")
+	e.store.AddLog(keyed.ID, "push", "sent to abcd1234…")
+	e.store.AddLog(keyed.ID, "push", "abcd… is no longer registered; removed")
+	e.store.AddLog(keyed.ID, "error", "boom")
+
+	got := decode(t, e.call("GET", "/admin/api/overview", ""))
+	for field, want := range map[string]float64{
+		"apps": 2, "accessKeys": 0, "devices": 0, "appsNeedingKey": 1, "sent24h": 1, "errors24h": 1,
+	} {
+		if got[field] != want {
+			t.Errorf("%s = %v, want %v", field, got[field], want)
+		}
+	}
+	if recent, _ := got["recent"].([]any); len(recent) != 3 {
+		t.Fatalf("recent has %d entries", len(recent))
+	}
+
+	app := decode(t, e.call("GET", "/admin/api/apps/"+strconv.FormatInt(keyed.ID, 10), ""))
+	if app["sent24h"] != 1.0 || app["errors24h"] != 1.0 {
+		t.Fatalf("the app's own counts are wrong: %v", app)
+	}
+}
+
+func TestDevices(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	app, _ := e.store.CreateApp("sayan")
+	key, _ := e.store.CreateKey(store.NewKey{AppID: app.ID, Hash: "h", Prefix: "abc123", Description: "School", Permissions: store.PermAll})
+	for i := 0; i < 3; i++ {
+		e.store.UpsertToken(store.Token{AppID: app.ID, KeyID: key.ID, Token: "device-token-number-" + strconv.Itoa(i), Device: "android", Channel: "default"})
+	}
+	base := "/admin/api/apps/" + strconv.FormatInt(app.ID, 10) + "/devices"
+
+	rec := e.call("GET", base+"?limit=2", "")
+	items, next := logPage(t, rec)
+	if len(items) != 2 || next == nil {
+		t.Fatalf("expected a full page, got %d and %v", len(items), next)
+	}
+	if strings.Contains(rec.Body.String(), "number-2") {
+		t.Fatal("a whole device token was given to the interface")
+	}
+	first := items[0]
+	if first["token"] != "device-t…" || first["platform"] != "android" ||
+		first["key"].(map[string]any)["prefix"] != "abc123" || first["key"].(map[string]any)["description"] != "School" {
+		t.Fatalf("unexpected device %v", first)
+	}
+
+	rest, next := logPage(t, e.call("GET", base+"?limit=2&before="+strconv.Itoa(int(*next)), ""))
+	if len(rest) != 1 || next != nil {
+		t.Fatalf("second page: %d (next %v)", len(rest), next)
+	}
+
+	status(t, e.call("GET", "/admin/api/apps/999/devices", ""), 404)
+
+	id := strconv.Itoa(int(first["id"].(float64)))
+	status(t, e.call("DELETE", base+"/"+id, ""), 200)
+	status(t, e.call("DELETE", base+"/"+id, ""), 404)
+	status(t, e.call("DELETE", base+"/x", ""), 404)
+	if left, _ := e.store.ListDevices(app.ID, 0, 10); len(left) != 2 {
+		t.Fatalf("%d devices left", len(left))
+	}
 }
