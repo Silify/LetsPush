@@ -2,21 +2,17 @@ package compat
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/Silify/letspush/internal/gateway"
 	"github.com/Silify/letspush/internal/store"
 )
 
-const (
-	maxTokenLength = 4096
-	defaultDevice  = "fcm"
-	defaultChannel = "default"
-
-	// Moodle's settings check registers this token to see whether its access key works.
-	probeToken = "testtoken"
-)
+// Moodle's settings check registers this token to see whether its access key works.
+const probeToken = "testtoken"
 
 // createToken is POST /tokens/{token}, with the device type in the form.
 func (h *Handler) createToken(w http.ResponseWriter, r *http.Request) {
@@ -47,38 +43,25 @@ func (h *Handler) createTokenV2(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) register(w http.ResponseWriter, sess session, token, device, channel string) {
-	if !sess.key.Can(store.PermCreateToken) {
-		writeError(w, http.StatusForbidden, "No permission to create token")
-		return
-	}
-	token = strings.TrimSpace(token)
-	if token == "" || len(token) > maxTokenLength {
-		writeError(w, http.StatusBadRequest, "Invalid token")
-		return
-	}
 	// A key that works answers like any other, without storing the probe.
-	if token == probeToken {
+	if strings.TrimSpace(token) == probeToken && sess.key.Can(store.PermCreateToken) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 		return
 	}
 
-	created, err := h.store.UpsertToken(store.Token{
-		AppID:   sess.app.ID,
-		KeyID:   sess.key.ID,
-		Token:   token,
-		Device:  orDefault(strings.ToLower(strings.TrimSpace(device)), defaultDevice),
-		Channel: orDefault(strings.TrimSpace(channel), defaultChannel),
-	})
-	if err != nil {
+	created, err := h.gateway.Register(sess.app, sess.key, token, device, channel)
+	switch {
+	case errors.Is(err, gateway.ErrNoPermission):
+		writeError(w, http.StatusForbidden, "No permission to create token")
+	case errors.Is(err, gateway.ErrInvalidToken):
+		writeError(w, http.StatusBadRequest, "Invalid token")
+	case err != nil:
 		writeError(w, http.StatusInternalServerError, "could not save the token")
-		return
-	}
-	if created {
-		_ = h.store.AddLog(sess.app.ID, "token", "added by key "+sess.key.Prefix)
+	case created:
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-		return
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "token exists"})
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "token exists"})
 }
 
 // deleteToken is DELETE /tokens/{token}.
@@ -87,21 +70,14 @@ func (h *Handler) deleteToken(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !sess.key.Can(store.PermDeleteToken) {
+	switch err := h.gateway.Remove(sess.app, sess.key, r.PathValue("token")); {
+	case errors.Is(err, gateway.ErrNoPermission):
 		writeError(w, http.StatusForbidden, "No permission to delete token")
-		return
-	}
-	if err := h.store.DeleteToken(sess.key.ID, r.PathValue("token")); err != nil {
+	case errors.Is(err, gateway.ErrTokenNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"status": "Token doesn't exist"})
-		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "something went wrong")
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	}
-	_ = h.store.AddLog(sess.app.ID, "token", "removed by key "+sess.key.Prefix)
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
-}
-
-func orDefault(value, fallback string) string {
-	if value == "" {
-		return fallback
-	}
-	return value
 }

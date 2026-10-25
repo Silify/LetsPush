@@ -20,8 +20,8 @@ type Store interface {
 
 	ListApps() ([]store.App, error)
 	AppByID(id int64) (store.App, error)
-	CreateApp(name, projectID, credentials string) (store.App, error)
-	UpdateAppCredentials(id int64, projectID, credentials string) error
+	CreateApp(name string, providers ...store.Provider) (store.App, error)
+	SetProvider(appID int64, p store.Provider) error
 	SetAllowKeyRequests(id int64, allow bool) error
 	DeleteApp(id int64) error
 

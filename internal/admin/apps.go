@@ -60,7 +60,11 @@ func (h *Handler) createApp(w http.ResponseWriter, r *http.Request, _ store.Admi
 	if !ok {
 		return
 	}
-	app, err := h.store.CreateApp(name, projectID, sealed)
+	var providers []store.Provider
+	if sealed != "" {
+		providers = append(providers, store.Provider{Kind: store.ProviderFCM, Label: projectID, Credentials: sealed})
+	}
+	app, err := h.store.CreateApp(name, providers...)
 	if err != nil {
 		storeError(w, err)
 		return
@@ -120,7 +124,7 @@ func (h *Handler) setCredentials(w http.ResponseWriter, r *http.Request, _ store
 	if !ok {
 		return
 	}
-	if err := h.store.UpdateAppCredentials(id, projectID, sealed); err != nil {
+	if err := h.store.SetProvider(id, store.Provider{Kind: store.ProviderFCM, Label: projectID, Credentials: sealed}); err != nil {
 		storeError(w, err)
 		return
 	}

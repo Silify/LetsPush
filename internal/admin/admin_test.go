@@ -242,7 +242,7 @@ func TestAppsAndTheirFirebaseKeys(t *testing.T) {
 	if app["projectId"] != "my-project" || app["hasCredentials"] != true {
 		t.Fatalf("unexpected app %v", app)
 	}
-	if sealed, _ := e.store.AppCredentials(int64(app["id"].(float64))); strings.Contains(sealed, "private_key") {
+	if p, _ := e.store.AppProvider(int64(app["id"].(float64)), store.ProviderFCM); p.Credentials == "" || strings.Contains(p.Credentials, "private_key") {
 		t.Fatal("the Firebase key was stored unsealed")
 	}
 	if strings.Contains(rec.Body.String(), "BEGIN PRIVATE KEY") {
@@ -285,7 +285,7 @@ func TestAppsAndTheirFirebaseKeys(t *testing.T) {
 func TestAccessKeys(t *testing.T) {
 	e := newEnv(t)
 	e.login()
-	app, _ := e.store.CreateApp("sayan", "", "")
+	app, _ := e.store.CreateApp("sayan")
 	base := "/admin/api/apps/" + strconv.FormatInt(app.ID, 10)
 
 	rec := e.call("POST", base+"/keys", `{"description":"School A","contact":"admin@a.example"}`)
@@ -324,7 +324,7 @@ func TestAccessKeys(t *testing.T) {
 func TestLogs(t *testing.T) {
 	e := newEnv(t)
 	e.login()
-	app, _ := e.store.CreateApp("sayan", "", "")
+	app, _ := e.store.CreateApp("sayan")
 	base := "/admin/api/apps/" + strconv.FormatInt(app.ID, 10) + "/logs"
 	for i := 0; i < 3; i++ {
 		e.store.AddLog(app.ID, "push", "line "+strconv.Itoa(i))

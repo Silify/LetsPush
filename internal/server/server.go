@@ -9,6 +9,7 @@ import (
 
 	"github.com/Silify/letspush/internal/admin"
 	"github.com/Silify/letspush/internal/compat"
+	"github.com/Silify/letspush/internal/gateway"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/store"
 	"github.com/Silify/letspush/internal/webui"
@@ -16,11 +17,11 @@ import (
 
 // Options are what the server is built from.
 type Options struct {
-	Store  *store.Store
-	Box    *secret.Box
-	Sender compat.Sender
-	Secret string
-	Now    func() time.Time
+	Store   *store.Store
+	Box     *secret.Box
+	Gateway *gateway.Service
+	Secret  string
+	Now     func() time.Time
 	// UI serves everything that is not an API call. It defaults to the built-in interface.
 	UI http.Handler
 }
@@ -38,7 +39,7 @@ func New(o Options) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	compatAPI := compat.New(o.Store, o.Sender, o.Box)
+	compatAPI := compat.New(o.Store, o.Gateway)
 
 	mux := http.NewServeMux()
 	// Longer, more specific patterns win, so the interface only gets what no API claims.

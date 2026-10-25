@@ -15,6 +15,7 @@ import (
 
 	"github.com/Silify/letspush/internal/config"
 	"github.com/Silify/letspush/internal/fcm"
+	"github.com/Silify/letspush/internal/gateway"
 	"github.com/Silify/letspush/internal/secret"
 	"github.com/Silify/letspush/internal/server"
 	"github.com/Silify/letspush/internal/store"
@@ -63,7 +64,14 @@ func run() error {
 		log.Printf("there is no admin yet: set LETSPUSH_ADMIN_EMAIL and LETSPUSH_ADMIN_PASSWORD and restart")
 	}
 
-	handler, err := server.New(server.Options{Store: db, Box: box, Sender: fcm.NewClient(), Secret: cfg.Secret})
+	gw := gateway.New(gateway.Config{
+		Store:     db,
+		Opener:    box,
+		Providers: map[string]gateway.Provider{store.ProviderFCM: fcm.NewProvider()},
+	})
+	defer gw.Wait() // let deliveries that are still running finish
+
+	handler, err := server.New(server.Options{Store: db, Box: box, Gateway: gw, Secret: cfg.Secret})
 	if err != nil {
 		return err
 	}
