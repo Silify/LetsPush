@@ -38,11 +38,25 @@ async function request(method, path, body) {
   return data;
 }
 
+/** "?a=1&b=2" from the values that are set. */
+function query(params) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') search.set(key, value);
+  }
+  const text = search.toString();
+  return text ? `?${text}` : '';
+}
+
 export const api = {
   me: () => request('GET', '/me'),
   login: (email, password) => request('POST', '/login', { email, password }),
   logout: () => request('POST', '/logout'),
   changePassword: (current, next) => request('POST', '/password', { current, new: next }),
+
+  overview: () => request('GET', '/overview'),
+  /** Every app's activity. Options: app, action, before, limit. Resolves to { items, next }. */
+  logs: (options = {}) => request('GET', `/logs${query(options)}`),
 
   apps: () => request('GET', '/apps'),
   app: (id) => request('GET', `/apps/${id}`),
@@ -50,7 +64,11 @@ export const api = {
   deleteApp: (id) => request('DELETE', `/apps/${id}`),
   setCredentials: (id, serviceAccount) => request('PUT', `/apps/${id}/credentials`, { serviceAccount }),
   setSettings: (id, allowKeyRequests) => request('PUT', `/apps/${id}/settings`, { allowKeyRequests }),
-  logs: (id) => request('GET', `/apps/${id}/logs?limit=50`),
+  /** One app's activity. Options: action, before, limit. Resolves to { items, next }. */
+  appLogs: (id, options = {}) => request('GET', `/apps/${id}/logs${query(options)}`),
+  /** One app's devices, newest first. Options: before, limit. Resolves to { items, next }. */
+  devices: (id, options = {}) => request('GET', `/apps/${id}/devices${query(options)}`),
+  removeDevice: (id, deviceId) => request('DELETE', `/apps/${id}/devices/${deviceId}`),
 
   createKey: (id, key) => request('POST', `/apps/${id}/keys`, key),
   revokeKey: (id, keyId) => request('DELETE', `/apps/${id}/keys/${keyId}`),

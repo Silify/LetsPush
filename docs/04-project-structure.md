@@ -137,11 +137,13 @@ The web interface, plain JavaScript with Svelte 5.
 
 ```text
 web/src/
-  main.js, App.svelte, app.css   entry, shell, theme (design tokens as CSS variables)
-  pages/                         one file per screen: Login, Apps, AppDetail, Account…
-  components/                    app-specific pieces: Topbar, Logo, CopyBox
+  main.js, App.svelte, app.css   entry, sign-in gate and page loader, theme (design tokens as CSS variables)
+  pages/                         one file per screen: Login, Overview, Apps, Activity, Account, AppPage
+  pages/app/                     the tabs of one app: Overview, Keys, Devices, Activity, Firebase, Connect, Settings
+  components/                    app-specific pieces: Shell, Nav, ThemeToggle, PageHeader, LogList, StatCard…
   lib/api.js                     the only place that calls /admin/api
-  lib/router.svelte.js           the small router
+  lib/router.svelte.js           the small router (#/apps/3/devices)
+  lib/apps.svelte.js             the list of apps, loaded once and shared by the sidebar and the pages
   lib/components/ui/             shadcn-svelte components (generated; edit with care)
 web/components.json              settings of the shadcn-svelte CLI
 web/scripts/clean.mjs            empties the build folder, keeping .gitkeep
@@ -159,7 +161,7 @@ web/scripts/clean.mjs            empties the build folder, keeping .gitkeep
 | A new push service                                        | A new package implementing `gateway.Provider`            |
 | A new table or column                                     | A **new** migration in `store/migrations`, plus `store`  |
 | A new setting                                             | `config`, then document it in [Getting started](02-getting-started.md) |
-| A new admin screen                                        | `web/src/pages`, a call in `lib/api.js`, a handler in `admin` |
+| A new admin screen                                        | `web/src/pages` (a tab of an app: `pages/app`), a call in `lib/api.js`, a handler in `admin` |
 | A new setting an app owns                                 | `apps` column (migration), `store`, `admin`, the app page |
 | A new log line about a request                            | `slog.*Context(ctx, …)` so it carries the request ID     |
 | Something used by two adapters                            | Probably `gateway`; if it is not a rule, `secret` or `reqid` |

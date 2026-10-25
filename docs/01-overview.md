@@ -30,8 +30,8 @@ image and data, and to ask how a delivery ended. See [Native API](11-native-api.
   devices.
 - **Access keys per site**, with permissions (register devices, remove devices, send). A key reaches
   only the devices it registered itself.
-- **A web interface** to create apps, upload Firebase keys, create and revoke access keys, and read each
-  app's activity log.
+- **A web dashboard**, light or dark, to create apps, upload Firebase keys, create and revoke access keys,
+  see each app's devices and read its activity log.
 - **Reliable delivery.** A busy or unreachable Firebase is retried; a slow one never loses a
   notification; a dead device is removed and reported the way Moodle expects.
 - **Traceable.** Every request has an ID that appears in the server log and in the activity log. When
