@@ -1,9 +1,8 @@
-<!-- A "p" whose bowl is a ring with a dot: a push pin and a notification ping. It takes the theme's colours. -->
-<svg class="size-7 shrink-0" viewBox="0 0 32 32" aria-hidden="true">
-  <rect width="32" height="32" rx="8" class="fill-primary" />
-  <g class="text-primary-foreground" fill="currentColor">
-    <rect x="8.2" y="8" width="4.2" height="17" rx="2.1" />
-    <circle cx="17.2" cy="13.4" r="4.6" fill="none" stroke="currentColor" stroke-width="4.2" />
-    <circle cx="17.2" cy="13.4" r="1.5" />
-  </g>
+<!--
+  The mark: a paper plane with three speed lines. It takes the text colour, so it is dark on a light page and
+  light on a dark one. The shape is drawn from the artwork in assets/ with plain lines, so it stays sharp at any size.
+-->
+<svg class="size-7 shrink-0" viewBox="82 127 840 840" fill="currentColor" aria-hidden="true">
+  <polygon points="850,285 632,805 538,655 655,470 440,540 346,482" stroke="currentColor" stroke-width="56" stroke-linejoin="round" />
+  <path d="M175 560H279M155 686H370M300 801H515" fill="none" stroke="currentColor" stroke-width="70" stroke-linecap="round" />
 </svg>
