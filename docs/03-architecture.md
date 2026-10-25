@@ -8,8 +8,8 @@ see [Project structure](04-project-structure.md).
 - **Moodle compatibility is a contract.** Real Moodle sites send real requests and look for exact
   answers (for example `404` with `Unregistered token`). The API in front of the gateway is shaped by
   that, and tests pin it.
-- **More than Moodle later.** More kinds of sites, more push services (APNs, Web Push), a native API
-  and other databases are expected. None of them should need edits across the code.
+- **More than Moodle.** More kinds of sites, more push services (APNs, Web Push) and other databases are
+  expected, and there is already a native API for new integrations. None of them should need edits across the code.
 - **Small to run.** One binary, one data file, no other service. An operator can understand it in an
   afternoon.
 - **Secrets are real.** A server holds Firebase keys that can send as the customer's app. Keys are
@@ -54,7 +54,7 @@ see [Project structure](04-project-structure.md).
 | Layer            | Package                | Job                                                                  |
 |------------------|------------------------|----------------------------------------------------------------------|
 | Composition      | `cmd/letspush`, `internal/server` | Build the pieces, wire them, serve HTTP, shut down cleanly |
-| Adapters         | `internal/compat`, `internal/admin`, `internal/webui` | Translate requests; no business rules |
+| Adapters         | `internal/compat`, `internal/native`, `internal/admin`, `internal/webui` | Translate requests; no business rules |
 | Core             | `internal/gateway`     | Permissions, device registration, picking a provider, delivery, logging |
 | Push services    | `internal/fcm`         | Implement `gateway.Provider` for Firebase                            |
 | Foundations      | `internal/store`, `internal/secret`, `internal/config`, `internal/reqid` | Data, sealing and hashing, settings, request IDs |
@@ -87,7 +87,7 @@ A Moodle site sends `POST /api/v2/push/`:
    **Pending**, and `compat` answers `202`. The delivery finishes by itself.
 
 Registering a device (`POST /tokens/{token}`) and removing one go through `gateway.Register` and
-`gateway.Remove`, so a native API will share their rules.
+`gateway.Remove`, so the native API shares their rules.
 
 ## 5. Keys, devices and permissions
 
@@ -102,6 +102,11 @@ Registering a device (`POST /tokens/{token}`) and removing one go through `gatew
 - A key that may create tokens registers an unknown device on first use, as AirNotifier does.
 
 ## 6. Delivery: waiting, retrying and errors
+
+A send from the native API is *tracked*: the gateway records a delivery with an ID before it starts and
+updates its status (`pending`, then `sent`, `failed` or `unregistered`) when it ends, whether the caller
+was still waiting or not. This is what lets a sender ask later. Sends from the compatible API are not
+tracked, because Moodle never asks. Old deliveries are purged with the log.
 
 ### The bounded wait
 
@@ -138,7 +143,9 @@ The gateway returns sentinel errors; the compatible API maps them:
 | `ErrDelivery`      | The push service refused or was unreachable          | `502` `error response from fcm`                    |
 | anything else      | A bug or a storage failure                           | `500` `something went wrong`                       |
 
-The compatible API's bodies are `{"error": "…"}`. Google's own explanation of a refusal goes to the
+The compatible API's bodies are `{"error": "…"}`; the native API's are
+`{"error": {"code", "message", "requestId"}}` with its own stable codes
+([Native API](11-native-api.md#errors)). Google's own explanation of a refusal goes to the
 logs and never to the calling site.
 
 ## 7. Security and privacy
@@ -168,6 +175,7 @@ anyway). Timestamps are integers (Unix seconds).
 | `access_keys`   | Hash, prefix, description, contact, permissions, last used, revoked           |
 | `tokens`        | Device token, platform, channel, owning key; unique per `(key, token)`        |
 | `logs`          | The activity log: app, action, text, time                                     |
+| `deliveries`    | How each `/v1` notification ended: ID, status, request ID. No message text   |
 
 **Migrations** are SQL files in `internal/store/migrations`, applied in name order, each in a
 transaction and recorded in `schema_migrations`. A migration is never edited after release; add a new
@@ -197,8 +205,8 @@ Not built, on purpose, for now:
 
 - APNs directly, Web Push directly, and other providers (all delivery goes through Firebase).
 - Topics, broadcast and scheduling.
-- A native API (planned as `/v1`: Bearer authentication, one JSON error shape, asynchronous delivery
-  with a status to look up).
+- Sending to many devices in one call, and delivery status for the compatible API (only `/v1` is
+  tracked).
 - More than one instance: storage is a single SQLite file.
 - More than one admin, or roles.
 - Other databases (PostgreSQL, MySQL), though the structure leaves room for them.

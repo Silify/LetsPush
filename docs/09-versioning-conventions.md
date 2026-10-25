@@ -23,8 +23,9 @@ what those things see. These are its **public contract**:
 
 1. **The compatible API** ([Compatible API](05-compatible-api.md)): routes, headers, request shapes, status
    codes and error texts that Moodle sites rely on.
-2. **The native API**, when it exists: its paths, bodies and errors. It is versioned in its path
-   (`/v1`); a breaking change is a new path (`/v2`) *and* a MAJOR release.
+2. **The native API** ([Native API](11-native-api.md)): its paths, bodies, error codes and statuses. It is
+   versioned in its path (`/v1`); a breaking change is a new path (`/v2`) *and* a MAJOR release. Adding an
+   optional field, an endpoint or an error code is not breaking.
 3. **The settings**: environment variable names, their meaning and their defaults.
 4. **The data**: the database file written by one version can be read by the next one (see section 4).
 

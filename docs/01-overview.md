@@ -11,8 +11,9 @@ with no plugin and no change to Moodle: its administrator fills in a few setting
 [Compatible API](05-compatible-api.md).
 
 AirNotifier is the model for what LetsPush does, not for how. LetsPush is a separate program, written
-in Go, with a cleaner structure, tighter security defaults and room to grow: more kinds of sites, more
-push services, and a native API of its own.
+in Go, with a cleaner structure, tighter security defaults and room to grow: more kinds of sites and more
+push services. It also has an API of its own, for new integrations that want to send a title, a body, an
+image and data, and to ask how a delivery ended. See [Native API](11-native-api.md).
 
 ## Who it is for
 
@@ -23,7 +24,7 @@ push services, and a native API of its own.
 
 ## What it does
 
-- **Receives pushes** from sites over the AirNotifier-compatible HTTP API and **delivers** them to
+- **Receives pushes** over the AirNotifier-compatible HTTP API or its own `/v1` API, and **delivers** them to
   devices through Firebase, to Android, iOS and the web.
 - **Several apps in one server.** Each app has its own Firebase key, its own access keys and its own
   devices.
@@ -95,6 +96,7 @@ done is listed as non-goals in [Architecture](03-architecture.md#10-deliberate-n
 | [Architecture](03-architecture.md)                     | Understand the design and its reasons               |
 | [Project structure](04-project-structure.md)           | Know where code goes and which imports are allowed  |
 | [Compatible API](05-compatible-api.md)                 | See exactly what the Moodle-compatible API accepts  |
+| [Native API](11-native-api.md)                         | Send notifications from your own plugin or site     |
 | [Operations](06-operations.md)                         | Deploy, back up, upgrade and troubleshoot a server  |
 | [Git conventions](07-git-conventions.md)               | Branch, commit and review the way the team does     |
 | [Naming conventions](08-naming-conventions.md)         | Name files, types and members consistently          |

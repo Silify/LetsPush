@@ -22,6 +22,7 @@ cmd/letspush/        the program: reads settings, wires the pieces, runs the ser
 internal/
   server/            composition: routes, middleware, startup helpers
   compat/            adapter: the AirNotifier / Moodle-compatible API
+  native/            adapter: LetsPush's own API, /v1
   admin/             adapter: the JSON API behind the web interface
   webui/             serves the built web interface (embedded)
   gateway/           the core: devices, permissions, delivery
@@ -42,8 +43,9 @@ An arrow means *may import*. Anything not listed is not allowed.
 
 ```text
 cmd/letspush ──► everything in internal/ it wires
-server       ──► compat, admin, webui, gateway, store, secret, reqid
+server       ──► compat, native, admin, webui, gateway, store, secret, reqid
 compat       ──► gateway, store, secret
+native       ──► gateway, store, secret, reqid
 admin        ──► store, secret, fcm
 fcm          ──► gateway
 gateway      ──► store, reqid
@@ -54,7 +56,8 @@ The rules that matter:
 
 - **`gateway` never imports an adapter or a push service.** It declares the `Provider` interface; `fcm`
   implements it and so imports `gateway`, not the other way round.
-- **Adapters never import each other.** `compat` and `admin` share nothing but the foundations.
+- **Adapters never import each other.** `compat`, `native` and `admin` share nothing but the
+  foundations. If two APIs need the same rule, it belongs in `gateway`.
 - **`store` imports nothing of ours.** Other packages describe what they need from the database as small
   interfaces of their own, and `*store.Store` satisfies them.
 - **Only `cmd/letspush` and `server` know about every package.**
@@ -81,6 +84,13 @@ The AirNotifier-compatible API: `handler.go` (routes, authentication by app name
 `push.go`, `accesskeys.go`, and `payload.go` (turning Moodle's body into a notification). It makes
 decisions only about the **wire format**; rules belong in the gateway. Tests include
 `moodle_test.go`, the pinned requests of the real plugin.
+
+### `internal/native/`
+
+LetsPush's own API under `/v1`: `handler.go` (routes, Bearer authentication, the one error shape),
+`devices.go`, and `notifications.go` (validating a request and turning it into a `gateway.Notification`).
+Its rules about what a request may contain live here, as they are about the wire format; who may send and
+what happens to a delivery live in the gateway. See [Native API](11-native-api.md).
 
 ### `internal/admin/`
 
@@ -144,6 +154,7 @@ web/scripts/clean.mjs            empties the build folder, keeping .gitkeep
 | A rule about who may send or register (any API)           | `gateway`                                                |
 | A new field or quirk of the Moodle request body           | `compat/payload.go`                                      |
 | A new status code or message for the Moodle API           | `compat`, mapped from a gateway error                    |
+| A new field or endpoint for new integrations              | `native` (and the `gateway.Notification` if it is sent), then [Native API](11-native-api.md) |
 | A new gateway error                                       | `gateway` (a sentinel), then map it in every API         |
 | A new push service                                        | A new package implementing `gateway.Provider`            |
 | A new table or column                                     | A **new** migration in `store/migrations`, plus `store`  |
