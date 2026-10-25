@@ -136,6 +136,12 @@ APNs and other platforms (all sends go through Firebase), topics and broadcast, 
 other platforms, and more than one admin or role. Several instances at once are not supported: storage is a
 single SQLite file.
 
+## Documentation
+
+The [`docs/`](docs/01-overview.md) folder has the details: [getting started](docs/02-getting-started.md),
+[architecture](docs/03-architecture.md), the [compatible API](docs/05-compatible-api.md),
+[operations](docs/06-operations.md) and the project's conventions.
+
 ## Development
 
 ```bash
