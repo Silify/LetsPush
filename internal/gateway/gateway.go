@@ -42,12 +42,27 @@ const (
 	defaultTimeout = 60 * time.Second
 )
 
+// Priorities of a notification.
+const (
+	PriorityNormal = "normal"
+	PriorityHigh   = "high"
+)
+
 // Notification is what the person sees, plus the data the app receives.
 // With no title and no body it is data only, and the app shows it.
 type Notification struct {
 	Title string
 	Body  string
+	// Image is the address of a picture to show with the notification.
+	Image string
 	Data  map[string]string
+
+	// Priority is PriorityNormal or PriorityHigh. Empty means high, which gets a phone's attention at once.
+	Priority string
+	// TTL is how long the push service keeps trying to reach a device that is off. Zero leaves it to the service.
+	TTL time.Duration
+	// Sound is the name of the sound to play. "default" is the device's usual one.
+	Sound string
 }
 
 // Device is where a notification goes.

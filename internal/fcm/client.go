@@ -59,7 +59,12 @@ type Message struct {
 	Token string
 	Title string
 	Body  string
+	Image string
 	Data  map[string]string
+
+	Priority string        // "normal" or "high"; empty means high
+	TTL      time.Duration // zero leaves it to Firebase
+	Sound    string
 }
 
 // Client sends messages. It keeps one access token per Firebase key and renews it before it expires.
@@ -106,7 +111,7 @@ func NewClient() *Client {
 // Send delivers a message. It returns ErrUnregistered for a dead device, and *Error for other refusals.
 // A busy Google (429, 5xx), a network failure or an expired access token is retried with a growing pause.
 func (c *Client) Send(ctx context.Context, creds Credentials, msg Message) error {
-	payload, err := json.Marshal(map[string]any{"message": buildMessage(msg)})
+	payload, err := json.Marshal(map[string]any{"message": buildMessage(msg, c.Now())})
 	if err != nil {
 		return err
 	}
@@ -269,15 +274,48 @@ func isUnregistered(status int, body []byte) bool {
 }
 
 // buildMessage is the FCM v1 message: a notification Android shows by itself, plus the data for the app.
-// With no title and no body the message is data only, and the app shows it.
-func buildMessage(m Message) map[string]any {
-	out := map[string]any{
-		"token":   m.Token,
-		"android": map[string]any{"priority": "high"},
-		"apns":    map[string]any{"headers": map[string]string{"apns-priority": "10"}},
+// With no title and no body the message is data only (an image needs a title or a body), and the app shows it. High priority is the
+// default, because a notification that arrives late is of little use.
+//
+// Delivery options are set for each platform's own fields: Android (priority, ttl, sound), Apple
+// (priority, expiration, sound) and the web (urgency, TTL). The web ones are only sent when the caller
+// chose a priority or a TTL.
+func buildMessage(m Message, now time.Time) map[string]any {
+	high := m.Priority != "normal"
+
+	android := map[string]any{"priority": "normal"}
+	apnsHeaders := map[string]string{"apns-priority": "5"}
+	if high {
+		android["priority"] = "high"
+		apnsHeaders["apns-priority"] = "10"
+	}
+	if m.TTL > 0 {
+		android["ttl"] = fmt.Sprintf("%ds", int64(m.TTL.Seconds()))
+		apnsHeaders["apns-expiration"] = strconv.FormatInt(now.Add(m.TTL).Unix(), 10)
+	}
+	apns := map[string]any{"headers": apnsHeaders}
+	if m.Sound != "" {
+		android["notification"] = map[string]string{"sound": m.Sound}
+		apns["payload"] = map[string]any{"aps": map[string]string{"sound": m.Sound}}
+	}
+
+	out := map[string]any{"token": m.Token, "android": android, "apns": apns}
+	if m.Priority != "" || m.TTL > 0 {
+		webHeaders := map[string]string{"Urgency": "normal"}
+		if high {
+			webHeaders["Urgency"] = "high"
+		}
+		if m.TTL > 0 {
+			webHeaders["TTL"] = strconv.FormatInt(int64(m.TTL.Seconds()), 10)
+		}
+		out["webpush"] = map[string]any{"headers": webHeaders}
 	}
 	if m.Title != "" || m.Body != "" {
-		out["notification"] = map[string]string{"title": m.Title, "body": m.Body}
+		notification := map[string]string{"title": m.Title, "body": m.Body}
+		if m.Image != "" {
+			notification["image"] = m.Image
+		}
+		out["notification"] = notification
 	}
 	if len(m.Data) > 0 {
 		out["data"] = m.Data
